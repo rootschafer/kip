@@ -1,0 +1,70 @@
+# Ferry Technical Reference
+
+Authoritative reference for non-obvious patterns. Read the code first — this covers the gotchas.
+
+---
+
+## Dioxus 0.7 RSX Gotchas
+
+- **No `cx`, `Scope`, or `use_state`**. Everything is signals and `#[component]` functions returning `Element`.
+- **Text in RSX** must be string literals `"hello"` or format strings `"{variable}"`. No inline expressions as text — extract to a variable first.
+- **Conditional rendering**: `if cond { rsx! {...} }` works, but not `if cond { "text" } else { &variable }` as text content.
+- **Loops**: Prefer `for item in items { rsx!{...} }` over `.map()`. Iterators in braces also work: `{items.iter().map(|i| rsx!{...})}`.
+- **Props**: Owned types only (`String` not `&str`). Must be `Clone + PartialEq`.
+- **`EventHandler`**: Use `EventHandler` (not closures) for callback props. Call with `.call(value)`.
+- **Assets**: `const X: Asset = asset!("/assets/file.css");` — path is relative to project root.
+
+## Logging
+
+`use dioxus::prelude::*` re-exports tracing macros: `info!`, `warn!`, `error!`, `debug!`, `trace!`. Use these everywhere — they go to the `dx serve` terminal and to `ferry.log` (configured in `main.rs` via `tracing-appender`).
+
+**Never show errors in the UI** unless the user needs to act on them. Log with `error!()` and show a graceful empty state instead.
+
+---
+
+## SurrealDB 3.0 Gotchas
+
+These are hard-won. SurrealDB 3.0 changed a lot from 2.x.
+
+### Engine & RecordId
+
+- Engine: `surrealdb::engine::local::SurrealKv` (NOT RocksDb)
+- RecordId: `surrealdb::types::RecordId` (NOT `surrealdb::RecordId`)
+- RecordId has **no Display impl**. Debug output is `RecordId { table: Table("x"), key: String("y") }` — useless. Use the `rid_string()` helper in `graph.rs` which produces `table:key`.
+- Direct `RecordId == RecordId` comparison works and is preferred over string comparison.
+
+### Querying
+
+- **`.take::<Vec<serde_json::Value>>()` FAILS** with "Expected any, got record" when results contain record ID fields. Use typed structs with `#[derive(SurrealValue)]` instead.
+- `SurrealValue` derive requires `surrealdb-types` as a **direct** Cargo dependency (the macro references the crate by name).
+- `.bind()` needs **owned values** (`String`, not `&String` or `&str`).
+- `type::thing()` was renamed to `type::record()` in 3.0.
+- **ORDER BY fields must appear in SELECT**: `SELECT id, name FROM x ORDER BY created_at` fails — must include `created_at` in select list.
+- **`type::record()` table name must be a query literal**, not a bind parameter. Use `format!("type::record('{table}', $key)")`, not `type::record($table, $key)` with `.bind(("table", ...))`. The key can be bound.
+
+### Schema
+
+- **ALL `DEFINE` statements need `OVERWRITE`** to be idempotent: `DEFINE TABLE OVERWRITE`, `DEFINE FIELD OVERWRITE`, `DEFINE INDEX OVERWRITE`.
+- **SCHEMAFULL nested objects**: If a field is `TYPE option<object>`, you must also define each nested field explicitly (e.g., `DEFINE FIELD OVERWRITE foo.bar ON table TYPE option<int>`).
+
+### Runtime
+
+- Don't drop the Tokio runtime after DB init — SurrealDB needs it for background channels. Use `Box::leak(Box::new(rt))`.
+- DB path: `~/Library/Application Support/Ferry/ferry.db`
+
+---
+
+## macOS I/O Priority (Ninja Mode)
+
+```rust
+extern "C" {
+    fn setiopolicy_np(iotype: i32, scope: i32, policy: i32) -> i32;
+}
+// IOPOL_TYPE_DISK=0, IOPOL_SCOPE_THREAD=2, IOPOL_THROTTLE=3, IOPOL_DEFAULT=0, IOPOL_NORMAL=1
+```
+
+---
+
+## Drive Detection
+
+Uses `diskutil info -plist <path>` to get volume UUID, name, filesystem, size, internal flag. Polls `/Volumes/` every 5 seconds. Skips symlinks (boot volume) and internal drives. See `src/devices/macos.rs`.

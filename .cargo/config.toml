@@ -1,0 +1,5 @@
+[env]
+LIBRARY_PATH = "/Users/anders/.nix-profile/lib"
+
+[target.x86_64-apple-darwin]
+rustflags = ["-L", "/Users/anders/.nix-profile/lib"]
