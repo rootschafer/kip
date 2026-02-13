@@ -655,3 +655,209 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ─── Utility ─── */
 .mt-24 { margin-top: 24px; }
+
+/* ─── File Picker ─── */
+.picker-pane {
+    position: fixed;
+    top: 80px;
+    right: 24px;
+    width: 720px;
+    height: 480px;
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    background: rgba(30, 33, 42, 0.92);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    z-index: 300;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: panel-in 0.2s ease-out;
+}
+
+.picker-title-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--glass-border);
+    flex-shrink: 0;
+    cursor: default;
+}
+.picker-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+}
+.picker-title-actions {
+    display: flex;
+    gap: 4px;
+}
+.picker-title-actions button {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-dim);
+    border: none;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.15s ease;
+}
+.picker-title-actions button:hover {
+    background: var(--glass-hover);
+    color: var(--text);
+}
+.picker-btn-close:hover {
+    background: rgba(248, 113, 113, 0.15) !important;
+    color: var(--red) !important;
+}
+.picker-btn-toggle.active {
+    color: var(--accent);
+}
+
+.picker-breadcrumb {
+    padding: 6px 16px;
+    font-size: 11px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--glass-border);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
+}
+
+.picker-columns {
+    flex: 1;
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
+    min-height: 0;
+}
+
+.picker-column {
+    min-width: 180px;
+    max-width: 220px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    border-right: 1px solid var(--glass-border);
+    padding: 4px 0;
+}
+.picker-column:last-child {
+    border-right: none;
+}
+
+.picker-entry {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    cursor: pointer;
+    transition: background 0.1s ease;
+    user-select: none;
+}
+.picker-entry:hover {
+    background: var(--glass-hover);
+}
+.picker-entry.selected {
+    background: rgba(74, 158, 255, 0.12);
+}
+
+.entry-icon {
+    font-size: 10px;
+    flex-shrink: 0;
+    width: 14px;
+    text-align: center;
+}
+.entry-icon.dir {
+    color: var(--accent);
+}
+.entry-icon.file {
+    color: var(--text-muted);
+}
+
+.entry-name {
+    font-size: 12px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+}
+.picker-entry.selected .entry-name {
+    color: #fff;
+}
+
+.entry-size {
+    font-size: 10px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.picker-bottom-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--glass-border);
+    flex-shrink: 0;
+}
+.picker-selected-path {
+    flex: 1;
+    font-size: 11px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.picker-add-btn {
+    flex-shrink: 0;
+}
+
+/* ─── Minimized tab bar ─── */
+.picker-tab-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    gap: 2px;
+    padding: 0 16px;
+    z-index: 250;
+    pointer-events: none;
+}
+.picker-tab {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    background: rgba(30, 33, 42, 0.9);
+    border: 1px solid var(--glass-border);
+    border-bottom: none;
+    border-radius: 10px 10px 0 0;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.picker-tab:hover {
+    background: rgba(40, 44, 56, 0.95);
+}
+.picker-tab-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+}
+.picker-tab-path {
+    font-size: 10px;
+    color: var(--text-muted);
+}

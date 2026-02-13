@@ -63,15 +63,16 @@ dx serve --platform desktop   # run with hot reload (NOT cargo run)
 - Directory scanner, chunked copier, scheduler (engine stubs — code exists but not wired to UI)
 - Drive detection via DiskArbitration polling
 - **Mapping graph UI**: glass containers for machines/drives, location nodes with path containment, drag-to-connect edge creation (bezier curves), shift+click and lasso multi-select, status indicator, review queue
-- **Add panel**: "+" button → pick machine/drive → opens file picker → creates location node
+- **Add panel**: "+" button → pick machine/drive → opens custom file picker
+- **Custom file picker** ✅ DONE: Column-view with persistent panes, minimize/restore tabs, dir traversal, "Add to workspace" button
 - **Remote machine creation**: inline form in add panel (name, hostname, SSH user)
 - Glassmorphic CSS throughout
 - Tracing-based logging to terminal + file
 
 ## What to Build Next (priority order)
 
-1. **Custom file picker** — Replace `rfd` native picker with column-view picker. Drag files/dirs onto workspace. Persistent panes that minimize. See `KIP_DESIGN_8_FILE_PICKER.md`.
-2. **Circular directory/group nodes** — Directories and groups render as circles. Click once = children orbit around. Click again = enter and show direct children.
+1. ✅ **Custom file picker** — DONE. Column-view picker with persistent panes. See `dev_notes/FILE_PICKER_IMPLEMENTATION.md`.
+2. **Circular directory/group nodes** — Directories and groups render as circles. Click once = children orbit around. Click again = enter and show direct children. See `dev_notes/CIRCULAR_NODES_IMPLEMENTATION.md`.
 3. **Grouping** — Select multiple nodes → group. Edge merging. Collapse/expand. See design doc 7.
 4. **Central Output node** — Circular merge point at center of workspace.
 5. **Per-node error badges** — Red/yellow circles at node top-left corners.

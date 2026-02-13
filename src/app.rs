@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 
 use crate::db::DbHandle;
+use crate::ui::file_picker::{FilePickerLayer, PickerManager};
 use crate::ui::graph::MappingGraph;
 use crate::ui::review_queue::ReviewQueue;
 
@@ -34,6 +35,7 @@ pub fn DbErrorApp() -> Element {
 #[component]
 pub fn App() -> Element {
     let db = use_context::<DbHandle>();
+    let _picker = use_context_provider(|| PickerManager::new());
     let hostname = use_signal(|| String::from("..."));
     let mut refresh_tick = use_signal(|| 0u32);
 
@@ -90,6 +92,7 @@ pub fn App() -> Element {
                 }
             }
             MappingGraph { refresh_tick: refresh_tick(), on_changed: on_refresh }
+            FilePickerLayer { on_location_added: on_refresh }
             ReviewQueue { refresh_tick: refresh_tick(), on_resolved: on_refresh }
         }
     }

@@ -168,7 +168,7 @@ fn short_label(path: &Path) -> String {
 
 #[component]
 pub fn FilePickerLayer(on_location_added: EventHandler) -> Element {
-    let picker = use_context::<PickerManager>();
+    let mut picker = use_context::<PickerManager>();
     let panes = picker.0.read().clone();
 
     if panes.is_empty() {
@@ -195,18 +195,17 @@ pub fn FilePickerLayer(on_location_added: EventHandler) -> Element {
                         let id = pane.id;
                         let label = short_label(&pane.root_path);
                         let name = pane.container_name.clone();
+                        let mut picker_ctx = picker;  // Capture picker outside the rsx block
                         rsx! {
                             div {
                                 key: "{id}",
                                 class: "picker-tab",
                                 onclick: move |_| {
-                                    let mut picker = use_context::<PickerManager>();
-                                    picker.restore(id);
+                                    picker_ctx.restore(id);
                                 },
                                 oncontextmenu: move |e: Event<MouseData>| {
                                     e.prevent_default();
-                                    let mut picker = use_context::<PickerManager>();
-                                    picker.close(id);
+                                    picker_ctx.close(id);
                                 },
                                 span { class: "picker-tab-name", "{name}" }
                                 span { class: "picker-tab-path", "{label}" }
@@ -299,18 +298,35 @@ fn PickerPaneView(pane_id: u64, on_location_added: EventHandler) -> Element {
                         class: if show_hidden { "picker-btn-toggle active" } else { "picker-btn-toggle" },
                         title: "Toggle hidden files",
                         onclick: move |_| {
-                            let show = {
+                            // 1. Toggle the flag and clear columns
+                            {
                                 let mut panes = picker.0.write();
                                 if let Some(p) = panes.iter_mut().find(|p| p.id == pane_id) {
                                     p.show_hidden = !p.show_hidden;
                                     p.columns.clear();
-                                    p.show_hidden
-                                } else {
-                                    false
                                 }
-                            };
-                            // Force reload by clearing columns — use_effect will reload
-                            let _ = show;
+                            }
+
+                            // 2. Reload root directory with new show_hidden setting
+                            spawn(async move {
+                                let (root, show_hidden) = {
+                                    let panes = picker.0.read();
+                                    panes
+                                        .iter()
+                                        .find(|p| p.id == pane_id)
+                                        .map(|p| (p.root_path.clone(), p.show_hidden))
+                                        .unwrap_or_else(|| (std::path::PathBuf::from("/"), false))
+                                };
+                                let entries = read_dir_sorted(&root, show_hidden).await;
+                                let mut panes = picker.0.write();
+                                if let Some(p) = panes.iter_mut().find(|p| p.id == pane_id) {
+                                    p.columns = vec![PickerColumn {
+                                        dir_path: root,
+                                        entries,
+                                        selected: None,
+                                    }];
+                                }
+                            });
                         },
                         ".*"
                     }

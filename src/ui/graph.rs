@@ -5,6 +5,7 @@ use surrealdb::types::{RecordId, RecordIdKey, SurrealValue};
 use tracing::{error, info, warn};
 
 use crate::db::DbHandle;
+use crate::ui::file_picker::PickerManager;
 use crate::ui::graph_types::*;
 
 const CONTAINER_WIDTH: f64 = 200.0;
@@ -100,6 +101,7 @@ enum AddPanelState {
 #[component]
 pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
     let db = use_context::<DbHandle>();
+    let mut picker = use_context::<PickerManager>();
     let mut drag = use_signal(|| DragState::None);
     let mut selected = use_signal(|| HashSet::<String>::new());
     let mut add_panel = use_signal(|| AddPanelState::Closed);
@@ -446,7 +448,6 @@ pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
                                             let connected = container.connected;
                                             let detail = if connected { container.kind.clone() } else { "offline".into() };
                                             let mount_point = container.mount_point.clone();
-                                            let db = db.clone();
 
                                             rsx! {
                                                 div {
@@ -455,28 +456,19 @@ pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
                                                     onclick: {
                                                         let cid = cid.clone();
                                                         let mount_point = mount_point.clone();
-                                                        let db = db.clone();
+                                                        let name = name.clone();
                                                         move |_| {
                                                             if !connected {
                                                                 warn!("cannot add to disconnected target");
                                                                 return;
                                                             }
-                                                            let cid = cid.clone();
-                                                            let mount_point = mount_point.clone();
-                                                            let db = db.clone();
-                                                            let on_changed = on_changed;
-                                                            let mut add_panel = add_panel;
-                                                            spawn(async move {
-                                                                *add_panel.write() = AddPanelState::Closed;
-                                                                match pick_and_add(&db, &cid, mount_point.as_deref()).await {
-                                                                    Ok(true) => {
-                                                                        info!("location added via picker");
-                                                                        on_changed.call(());
-                                                                    }
-                                                                    Ok(false) => info!("picker cancelled"),
-                                                                    Err(e) => error!("add location failed: {}", e),
-                                                                }
-                                                            });
+                                                            let root = mount_point.clone().unwrap_or_else(|| "/".to_string());
+                                                            picker.open(
+                                                                cid.clone(),
+                                                                name.clone(),
+                                                                std::path::PathBuf::from(root),
+                                                            );
+                                                            *add_panel.write() = AddPanelState::Closed;
                                                         }
                                                     },
                                                     div {
@@ -737,49 +729,6 @@ async fn load_review_count(db: &DbHandle) -> Result<i64, String> {
 }
 
 // ─── Actions ────────────────────────────────────────────────
-
-async fn pick_and_add(db: &DbHandle, container_id: &str, root: Option<&str>) -> Result<bool, String> {
-    let mut dialog = rfd::AsyncFileDialog::new().set_title("Choose file or folder");
-
-    if let Some(root_path) = root {
-        dialog = dialog.set_directory(root_path);
-    }
-
-    let picked = dialog.pick_file().await;
-
-    match picked {
-        Some(handle) => {
-            let path = handle.path().to_string_lossy().to_string();
-            info!("picked: {}", path);
-            add_location(db, container_id, &path).await?;
-            Ok(true)
-        }
-        None => Ok(false),
-    }
-}
-
-async fn add_location(db: &DbHandle, container_id: &str, path: &str) -> Result<(), String> {
-    let (table, key) = parse_rid(container_id).ok_or("Invalid container ID")?;
-
-    let query = format!(
-        "LET $container = type::record('{table}', $key);
-         CREATE location CONTENT {{
-             {table}: $container,
-             path: $path,
-             available: true,
-             created_at: time::now(),
-         }}"
-    );
-
-    db.db
-        .query(&query)
-        .bind(("key", key.to_string()))
-        .bind(("path", path.to_string()))
-        .await.map_err(|e| e.to_string())?
-        .check().map_err(|e| e.to_string())?;
-
-    Ok(())
-}
 
 async fn create_edge(db: &DbHandle, source_id: &str, dest_id: &str) -> Result<(), String> {
     let (_, src_key) = parse_rid(source_id).ok_or("Invalid source ID")?;
