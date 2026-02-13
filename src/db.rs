@@ -9,6 +9,12 @@ pub struct DbHandle {
     pub db: Surreal<Db>,
 }
 
+impl PartialEq for DbHandle {
+    fn eq(&self, _other: &Self) -> bool {
+        true // Single global instance
+    }
+}
+
 /// Resolve the database file path.
 /// ~/Library/Application Support/kip/kip.db
 fn db_path() -> PathBuf {

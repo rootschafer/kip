@@ -66,6 +66,7 @@ dx serve --platform desktop   # run with hot reload (NOT cargo run)
 - **Add panel**: "+" button → pick machine/drive → opens custom file picker
 - **Custom file picker** ✅ DONE: Column-view with persistent panes, minimize/restore tabs, dir traversal, "Add to workspace" button
 - **Remote machine creation**: inline form in add panel (name, hostname, SSH user)
+- **Circular directory nodes** ✅ NEARLY COMPLETE: Directories render as circles with child counts, click once for orbit view, click again for expanded view
 - Glassmorphic CSS throughout
 - Tracing-based logging to terminal + file
 

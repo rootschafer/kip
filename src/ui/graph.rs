@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::collections::HashMap;
 
 use dioxus::prelude::*;
 use surrealdb::types::{RecordId, RecordIdKey, SurrealValue};
@@ -7,6 +8,7 @@ use tracing::{error, info, warn};
 use crate::db::DbHandle;
 use crate::ui::file_picker::PickerManager;
 use crate::ui::graph_types::*;
+use crate::ui::container_components::*;
 
 const CONTAINER_WIDTH: f64 = 200.0;
 const CONTAINER_GAP: f64 = 32.0;
@@ -56,7 +58,7 @@ struct ReviewCountRow {
 
 // ─── Helpers ─────────────────────────────────────────────────
 
-fn rid_string(id: &RecordId) -> String {
+pub(crate) fn rid_string(id: &RecordId) -> String {
     let table = id.table.to_string();
     match &id.key {
         RecordIdKey::String(s) => format!("{table}:{s}"),
@@ -72,7 +74,7 @@ fn parse_rid(s: &str) -> Option<(&str, &str)> {
 // ─── Interaction state ───────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq)]
-enum DragState {
+pub(crate) enum DragState {
     None,
     CreatingEdge {
         source_id: String,
@@ -104,6 +106,7 @@ pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
     let mut picker = use_context::<PickerManager>();
     let mut drag = use_signal(|| DragState::None);
     let mut selected = use_signal(|| HashSet::<String>::new());
+    let mut expansion_state = use_signal(|| HashMap::<String, (bool, bool)>::new());
     let mut add_panel = use_signal(|| AddPanelState::Closed);
 
     // Add-machine form fields
@@ -144,20 +147,43 @@ pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
     let status_class = if review_count > 0 { "status-indicator error" } else { "status-indicator ok" };
     let status_count = review_count;
 
+    // Pre-compute lasso rect (RSX macro can't handle let bindings inside if-let)
+    let (lasso_active, lasso_x, lasso_y, lasso_w, lasso_h) = {
+        let d = drag.read();
+        match &*d {
+            DragState::Lasso { start_x, start_y, current_x, current_y } => (
+                true,
+                start_x.min(*current_x),
+                start_y.min(*current_y),
+                (current_x - start_x).abs(),
+                (current_y - start_y).abs(),
+            ),
+            _ => (false, 0.0, 0.0, 0.0, 0.0),
+        }
+    };
+
     rsx! {
-        div { class: "graph-area",
-            // Top bar: status indicator + add button
-            div { class: "graph-toolbar",
-                // Status indicator
-                div { class: "{status_class}",
+        div { 
+            class: "graph-area",
+            div { 
+                class: "graph-toolbar",
+                div { 
+                    class: "{status_class}",
                     if review_count > 0 {
-                        span { class: "status-count", "{status_count}" }
-                        span { class: "status-label",
-                            if review_count == 1 { "issue" } else { "issues" }
+                        span { 
+                            class: "status-count", 
+                            "{status_count}" 
+                        }
+                        span { 
+                            class: "status-label",
+                            if review_count == 1 {
+                                "issue"
+                            } else {
+                                "issues"
+                            }
                         }
                     }
                 }
-                // Add button
                 button {
                     class: "btn-add",
                     onclick: move |_| *add_panel.write() = AddPanelState::PickTarget,
@@ -168,42 +194,43 @@ pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
             div {
                 class: "graph-wrapper",
                 // Mouse handlers for drag/lasso
-                onmousedown: {
-                    move |e: MouseEvent| {
-                        // Shift+drag on empty space = lasso
-                        if e.modifiers().shift() {
-                            let coords = e.page_coordinates();
+                onmousedown: move |e: MouseEvent| {
+                    // Shift+drag on empty space = lasso
+                    if e.modifiers().shift() {
+                        let coords = e.page_coordinates();
+                        *drag.write() = DragState::Lasso {
+                            start_x: coords.x,
+                            start_y: coords.y,
+                            current_x: coords.x,
+                            current_y: coords.y,
+                        };
+                    } else {
+                        // Click on empty space = deselect all
+                        selected.write().clear();
+                    }
+                },
+                onmousemove: move |e: MouseEvent| {
+                    let current = drag.read().clone();
+                    let coords = e.page_coordinates();
+                    match current {
+                        DragState::CreatingEdge { source_id, source_x, source_y, .. } => {
+                            *drag.write() = DragState::CreatingEdge {
+                                source_id,
+                                source_x,
+                                source_y,
+                                mouse_x: coords.x,
+                                mouse_y: coords.y,
+                            };
+                        }
+                        DragState::Lasso { start_x, start_y, .. } => {
                             *drag.write() = DragState::Lasso {
-                                start_x: coords.x,
-                                start_y: coords.y,
+                                start_x,
+                                start_y,
                                 current_x: coords.x,
                                 current_y: coords.y,
                             };
-                        } else {
-                            // Click on empty space = deselect all
-                            selected.write().clear();
                         }
-                    }
-                },
-                onmousemove: {
-                    move |e: MouseEvent| {
-                        let current = drag.read().clone();
-                        let coords = e.page_coordinates();
-                        match current {
-                            DragState::CreatingEdge { source_id, source_x, source_y, .. } => {
-                                *drag.write() = DragState::CreatingEdge {
-                                    source_id, source_x, source_y,
-                                    mouse_x: coords.x, mouse_y: coords.y,
-                                };
-                            }
-                            DragState::Lasso { start_x, start_y, .. } => {
-                                *drag.write() = DragState::Lasso {
-                                    start_x, start_y,
-                                    current_x: coords.x, current_y: coords.y,
-                                };
-                            }
-                            _ => {}
-                        }
+                        _ => {}
                     }
                 },
                 onmouseup: {
@@ -235,19 +262,15 @@ pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
                         *drag.write() = DragState::None;
                     }
                 },
-
                 div {
                     class: "graph-html-layer",
                     style: "width: {canvas_width}px; min-height: {canvas_height}px;",
-
                     // SVG overlay for edges + rubber band + lasso
                     svg {
                         class: "graph-svg-overlay",
                         width: "{canvas_width}",
                         height: "{canvas_height}",
                         style: "width: {canvas_width}px; height: {canvas_height}px;",
-
-                        // Edges
                         for edge in edges.iter() {
                             {
                                 let source_pos = node_positions.iter().find(|(id, _, _)| *id == edge.source_id);
@@ -255,7 +278,11 @@ pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
                                 if let (Some((_, sx, sy)), Some((_, dx, dy))) = (source_pos, dest_pos) {
                                     let path_d = bezier_path(*sx, *sy, *dx, *dy);
                                     let color = edge_color(&edge.status);
-                                    let width = if edge.status == "transferring" || edge.status == "scanning" { "3" } else { "2" };
+                                    let width = if edge.status == "transferring" || edge.status == "scanning" {
+                                        "3"
+                                    } else {
+                                        "2"
+                                    };
                                     let key = rid_string(&edge.intent_id);
                                     rsx! {
                                         path {
@@ -289,138 +316,32 @@ pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
                             }
                         }
 
-                        // Lasso rectangle
-                        if let DragState::Lasso { start_x, start_y, current_x, current_y } = *drag.read() {
-                            {
-                                let lx = start_x.min(current_x);
-                                let ly = start_y.min(current_y);
-                                let lw = (current_x - start_x).abs();
-                                let lh = (current_y - start_y).abs();
-                                rsx! {
-                                    rect {
-                                        x: "{lx}",
-                                        y: "{ly}",
-                                        width: "{lw}",
-                                        height: "{lh}",
-                                        fill: "rgba(74, 158, 255, 0.08)",
-                                        stroke: "#4a9eff",
-                                        stroke_width: "1",
-                                        stroke_dasharray: "4 3",
-                                        rx: "4",
-                                    }
-                                }
+                        // Lasso rectangle (values pre-computed above)
+                        if lasso_active {
+                            rect {
+                                x: "{lasso_x}",
+                                y: "{lasso_y}",
+                                width: "{lasso_w}",
+                                height: "{lasso_h}",
+                                fill: "rgba(74, 158, 255, 0.08)",
+                                stroke: "#4a9eff",
+                                stroke_width: "1",
+                                stroke_dasharray: "4 3",
+                                rx: "4",
                             }
                         }
                     }
 
                     // HTML containers
                     for container in containers.iter() {
-                        {
-                            let cid = rid_string(&container.id);
-                            let container_nodes: Vec<&NodeView> = nodes
-                                .iter()
-                                .filter(|n| n.container_id == cid)
-                                .collect();
-
-                            let disconnected_class = if container.connected { "" } else { " disconnected" };
-                            let kind_label = if container.connected { container.kind.as_str() } else { "offline" };
-
-                            rsx! {
-                                div {
-                                    key: "{cid}",
-                                    class: "graph-container{disconnected_class}",
-                                    style: "left: {container.x}px; top: {container.y}px;",
-
-                                    div { class: "container-header",
-                                        div {
-                                            class: "container-dot",
-                                            style: "background: {container.color};",
-                                        }
-                                        span { class: "container-name", "{container.name}" }
-                                        span { class: "container-kind", "{kind_label}" }
-                                    }
-
-                                    div { class: "container-nodes",
-                                        for node in container_nodes.iter() {
-                                            {
-                                                let node_id_str = rid_string(&node.id);
-                                                let node_cx = node.center_x();
-                                                let node_cy = node.center_y();
-                                                let db = db.clone();
-                                                let on_changed = on_changed;
-                                                let is_selected = selected().contains(&node_id_str);
-                                                let node_class = match (node.depth > 0, is_selected) {
-                                                    (false, false) => "graph-node",
-                                                    (true, false) => "graph-node nested",
-                                                    (false, true) => "graph-node selected",
-                                                    (true, true) => "graph-node nested selected",
-                                                };
-
-                                                rsx! {
-                                                    div {
-                                                        key: "{node_id_str}",
-                                                        class: "{node_class}",
-
-                                                        onmousedown: {
-                                                            let node_id_str = node_id_str.clone();
-                                                            move |e: MouseEvent| {
-                                                                e.stop_propagation();
-                                                                if e.modifiers().shift() {
-                                                                    // Shift+click: toggle selection
-                                                                    let mut sel = selected.write();
-                                                                    if sel.contains(&node_id_str) {
-                                                                        sel.remove(&node_id_str);
-                                                                    } else {
-                                                                        sel.insert(node_id_str.clone());
-                                                                    }
-                                                                } else {
-                                                                    // Normal drag: create edge
-                                                                    let coords = e.page_coordinates();
-                                                                    *drag.write() = DragState::CreatingEdge {
-                                                                        source_id: node_id_str.clone(),
-                                                                        source_x: node_cx,
-                                                                        source_y: node_cy,
-                                                                        mouse_x: coords.x,
-                                                                        mouse_y: coords.y,
-                                                                    };
-                                                                }
-                                                            }
-                                                        },
-
-                                                        onmouseup: {
-                                                            let node_id_str = node_id_str.clone();
-                                                            move |e: MouseEvent| {
-                                                                e.stop_propagation();
-                                                                let current = drag.read().clone();
-                                                                if let DragState::CreatingEdge { source_id, .. } = current {
-                                                                    if source_id != node_id_str {
-                                                                        info!("creating edge: {} -> {}", source_id, node_id_str);
-                                                                        let source = source_id;
-                                                                        let dest = node_id_str.clone();
-                                                                        let db = db.clone();
-                                                                        let on_changed = on_changed;
-                                                                        spawn(async move {
-                                                                            match create_edge(&db, &source, &dest).await {
-                                                                                Ok(()) => info!("edge created"),
-                                                                                Err(e) => error!("edge creation failed: {}", e),
-                                                                            }
-                                                                            on_changed.call(());
-                                                                        });
-                                                                    }
-                                                                }
-                                                                *drag.write() = DragState::None;
-                                                            }
-                                                        },
-
-                                                        span { class: "node-label", "{node.label}" }
-                                                        div { class: "node-handle" }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                        GraphContainer {
+                            container: container.clone(),
+                            nodes: nodes.clone(),
+                            selected: selected,
+                            drag: drag,
+                            expansion_state: expansion_state,
+                            db: db.clone(),
+                            on_changed: on_changed,
                         }
                     }
                 }
@@ -431,11 +352,9 @@ pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
                 div {
                     class: "add-panel-overlay",
                     onclick: move |_| *add_panel.write() = AddPanelState::Closed,
-
                     div {
                         class: "add-panel",
                         onclick: move |e: MouseEvent| e.stop_propagation(),
-
                         match &*add_panel.read() {
                             AddPanelState::PickTarget => rsx! {
                                 div { class: "add-panel-title", "Add location" }
@@ -463,18 +382,11 @@ pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
                                                                 return;
                                                             }
                                                             let root = mount_point.clone().unwrap_or_else(|| "/".to_string());
-                                                            picker.open(
-                                                                cid.clone(),
-                                                                name.clone(),
-                                                                std::path::PathBuf::from(root),
-                                                            );
+                                                            picker.open(cid.clone(), name.clone(), std::path::PathBuf::from(root));
                                                             *add_panel.write() = AddPanelState::Closed;
                                                         }
                                                     },
-                                                    div {
-                                                        class: "item-dot",
-                                                        style: "background: {color};",
-                                                    }
+                                                    div { class: "item-dot", style: "background: {color};" }
                                                     span { class: "item-name", "{name}" }
                                                     span { class: "item-detail", "{detail}" }
                                                 }
@@ -675,6 +587,24 @@ async fn load_nodes(
             let node_y = container.y + HEADER_H + (*count as f64) * (NODE_HEIGHT + NODE_GAP) + NODE_GAP;
             *count += 1;
 
+            // Count direct children among sibling locations
+            let parent_parts: Vec<&str> = row.path.split('/').filter(|s| !s.is_empty()).collect();
+            let child_count = all_paths.iter()
+                .filter(|&&other| {
+                    if !path_contains(&row.path, other) { return false; }
+                    let child_parts: Vec<&str> = other.split('/').filter(|s| !s.is_empty()).collect();
+                    child_parts.len() == parent_parts.len() + 1
+                })
+                .count();
+
+            // A node is a directory if it has children among sibling locations,
+            // or if the filesystem says so (fast metadata check)
+            let is_dir = if child_count > 0 {
+                true
+            } else {
+                std::path::Path::new(&row.path).is_dir()
+            };
+
             let indent = depth as f64 * INDENT_PX;
             nodes.push(NodeView {
                 id: row.id.clone(),
@@ -686,6 +616,10 @@ async fn load_nodes(
                 width: CONTAINER_WIDTH - PADDING_X * 2.0 - indent,
                 height: NODE_HEIGHT,
                 depth,
+                is_dir,
+                is_expanded: false,
+                is_orbit: false,
+                child_count,
             });
         }
     }

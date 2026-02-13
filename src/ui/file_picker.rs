@@ -168,7 +168,7 @@ fn short_label(path: &Path) -> String {
 
 #[component]
 pub fn FilePickerLayer(on_location_added: EventHandler) -> Element {
-    let mut picker = use_context::<PickerManager>();
+    let picker = use_context::<PickerManager>();
     let panes = picker.0.read().clone();
 
     if panes.is_empty() {

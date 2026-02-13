@@ -79,3 +79,51 @@ extern "C" {
 ## Drive Detection
 
 Uses `diskutil info -plist <path>` to get volume UUID, name, filesystem, size, internal flag. Polls `/Volumes/` every 5 seconds. Skips symlinks (boot volume) and internal drives. See `src/devices/macos.rs`.
+
+---
+
+## Circular Directory Nodes Implementation
+
+### Data Structures
+
+- `NodeView` struct in `src/ui/graph_types.rs` includes new fields for circular directory nodes:
+  - `is_dir`: bool (Directory = circle, File = pill)
+  - `is_expanded`: bool (false = collapsed, true = expanded inside view)
+  - `is_orbit`: bool (true = children fanned out around it in orbit view)
+  - `child_count`: usize (Number of direct children)
+
+### Component Architecture
+
+- Refactored complex RSX blocks into modular components in `src/ui/container_components.rs`:
+  - `ContainerHeader` - Renders container header with dot, name, and kind
+  - `ContainerNodes` - Manages node rendering within a container
+  - `GraphContainer` - Combines header and nodes for complete container rendering
+
+### Directory Detection
+
+- Implemented directory detection using `std::fs::metadata()` with `tokio::task::spawn_blocking`
+- Results cached during refresh cycles for performance optimization
+
+### Expansion States
+
+- Three-state expansion model: collapsed → orbit → expanded → collapsed
+- Managed through HashMap signal in the graph component
+- Click handling implemented to toggle between states
+
+### Visual Styling
+
+- Comprehensive CSS classes for all node states in `assets/main.css`
+- Glassmorphic design consistent with overall application aesthetic
+- Proper hover states, selection indicators, and child count display
+
+### Layout Calculations
+
+- `compute_orbit_positions` function for proper child positioning around parent
+- Path containment utilities for determining nesting relationships
+- Depth calculation for proper indentation in traditional view
+
+### Performance Considerations
+
+- Child count calculation optimized to avoid redundant computations
+- Directory detection cached during refresh cycles
+- Efficient state management through Dioxus signals

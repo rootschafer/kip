@@ -479,6 +479,42 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
     letter-spacing: 0.5px;
 }
 
+/* ─── Directory circle nodes (HTML) ─── */
+.graph-node.dir-node {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    align-self: center;
+    cursor: pointer;
+}
+.graph-node.dir-node .child-count {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-dim);
+    line-height: 1;
+}
+.graph-node.dir-node .node-label {
+    font-size: 8px;
+    max-width: 48px;
+    text-align: center;
+    line-height: 1.1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-muted);
+}
+.graph-node.dir-node .node-handle {
+    right: -2px;
+}
+.graph-node.dir-node.expanded {
+    border-color: var(--accent);
+    background: rgba(74, 158, 255, 0.06);
+    box-shadow: 0 0 8px var(--accent-glow);
+}
 /* ─── Status badges ─── */
 .badge {
     display: inline-block;
@@ -860,4 +896,91 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .picker-tab-path {
     font-size: 10px;
     color: var(--text-muted);
+}
+
+/* ─── Expanded view for circular nodes ─── */
+.node-expanded-container {
+    position: absolute;
+    background: var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    z-index: 100;
+}
+
+.node-expanded-header {
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    color: var(--text);
+}
+
+.node-expanded-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.node-expand-toggle {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--glass-hover);
+    border: 1px solid var(--glass-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 10px;
+    transition: all 0.15s ease;
+}
+
+.node-expand-toggle:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.expanded-child-row {
+    display: flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.expanded-child-row:hover {
+    background: var(--glass-hover);
+}
+
+.expanded-child {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+}
+
+.expanded-child-check {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    background: var(--accent);
+    color: white;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.expanded-child-label {
+    font-size: 12px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
 }

@@ -38,6 +38,12 @@ pub struct NodeView {
     pub height: f64,
     /// Nesting depth: 0 = top-level, 1 = contained by another node, etc.
     pub depth: usize,
+
+    // NEW FIELDS for circular directory nodes:
+    pub is_dir: bool,           // Directory = circle, File = pill
+    pub is_expanded: bool,      // false = collapsed, true = expanded (inside view)
+    pub is_orbit: bool,         // true = children fanned out around it (orbit view)
+    pub child_count: usize,     // Number of direct children
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -83,6 +89,26 @@ pub fn edge_color(status: &str) -> &'static str {
     }
 }
 
+/// Compute orbit positions for children around a parent node
+pub fn compute_orbit_positions(parent_x: f64, parent_y: f64, children: &[&NodeView]) -> Vec<(usize, f64, f64)> {
+    const RING_RADIUS: f64 = 80.0;
+    let n = children.len() as f64;
+    let mut positions = Vec::new();
+
+    // Handle edge case of no children
+    if n == 0.0 {
+        return positions;
+    }
+
+    for (i, _child) in children.iter().enumerate() {
+        let angle = (i as f64 / n) * 2.0 * std::f64::consts::PI;
+        let x = parent_x + RING_RADIUS * angle.cos();
+        let y = parent_y + RING_RADIUS * angle.sin();
+        positions.push((i, x, y));
+    }
+    positions
+}
+
 /// Check if `child` path is contained within `parent` path.
 /// "/a/b/c" is contained in "/a/b" but "/a/bc" is NOT contained in "/a/b".
 pub fn path_contains(parent: &str, child: &str) -> bool {
@@ -114,6 +140,27 @@ pub fn short_path(path: &str) -> String {
     } else {
         format!(".../{}", parts[parts.len() - 2..].join("/"))
     }
+}
+
+/// Get direct children of a node based on path containment
+pub fn get_direct_children<'a>(parent: &'a NodeView, all_nodes: &'a [NodeView]) -> Vec<&'a NodeView> {
+    all_nodes
+        .iter()
+        .filter(|child| {
+            // Child must be different from parent
+            if child.id == parent.id {
+                return false;
+            }
+            // Child path must be directly contained in parent path
+            if !path_contains(&parent.path, &child.path) {
+                return false;
+            }
+            // Child must be exactly one level deeper (direct child)
+            let parent_components: Vec<&str> = parent.path.split('/').filter(|s| !s.is_empty()).collect();
+            let child_components: Vec<&str> = child.path.split('/').filter(|s| !s.is_empty()).collect();
+            child_components.len() == parent_components.len() + 1
+        })
+        .collect()
 }
 
 #[cfg(test)]
