@@ -11,7 +11,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 
 fn main() {
-    let file_appender = tracing_appender::rolling::never(".", "ferry.log");
+    let file_appender = tracing_appender::rolling::never(".", "kip.log");
     tracing_subscriber::registry()
       .with(tracing_subscriber::fmt::layer().with_writer(file_appender))
       .init();

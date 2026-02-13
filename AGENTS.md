@@ -1,4 +1,4 @@
-# Ferry Technical Reference
+# Kip Technical Reference
 
 Authoritative reference for non-obvious patterns. Read the code first — this covers the gotchas.
 
@@ -16,7 +16,7 @@ Authoritative reference for non-obvious patterns. Read the code first — this c
 
 ## Logging
 
-`use dioxus::prelude::*` re-exports tracing macros: `info!`, `warn!`, `error!`, `debug!`, `trace!`. Use these everywhere — they go to the `dx serve` terminal and to `ferry.log` (configured in `main.rs` via `tracing-appender`).
+`use dioxus::prelude::*` re-exports tracing macros: `info!`, `warn!`, `error!`, `debug!`, `trace!`. Use these everywhere — they go to the `dx serve` terminal and to `kip.log` (configured in `main.rs` via `tracing-appender`).
 
 **Never show errors in the UI** unless the user needs to act on them. Log with `error!()` and show a graceful empty state instead.
 
@@ -50,7 +50,7 @@ These are hard-won. SurrealDB 3.0 changed a lot from 2.x.
 ### Runtime
 
 - Don't drop the Tokio runtime after DB init — SurrealDB needs it for background channels. Use `Box::leak(Box::new(rt))`.
-- DB path: `~/Library/Application Support/Ferry/ferry.db`
+- DB path: `~/Library/Application Support/kip/kip.db`
 
 ---
 

@@ -13,7 +13,7 @@ pub struct DbError(pub String);
 pub fn DbErrorApp() -> Element {
     let err = use_context::<DbError>();
     let msg = if err.0.contains("already locked") {
-        "Database is being accessed by another Ferry instance."
+        "Database is being accessed by another Kip instance."
     } else {
         &err.0
     };
@@ -22,7 +22,7 @@ pub fn DbErrorApp() -> Element {
         document::Stylesheet { href: MAIN_CSS }
         div { class: "app",
             div { class: "header",
-                h1 { "Ferry" }
+                h1 { "Kip" }
             }
             div { class: "db-locked-banner",
                 "{msg}"
@@ -84,7 +84,7 @@ pub fn App() -> Element {
         document::Stylesheet { href: MAIN_CSS }
         div { class: "app",
             div { class: "header",
-                h1 { "Ferry" }
+                h1 { "Kip" }
                 div { class: "header-right",
                     span { class: "host", "{hostname}" }
                 }

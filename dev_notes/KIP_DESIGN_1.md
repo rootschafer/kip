@@ -1,7 +1,7 @@
-# Ferry — File Transfer Orchestrator
+# Kip — File Transfer Orchestrator
 
 ## Vision
-A persistent, crash-resilient file transfer app. You declare intents ("these files should end up there") and Ferry makes it happen — surviving reboots, network drops, drive disconnects. Errors resolve silently when possible; when they can't, they queue up for human review with full file previews and clear resolution options.
+A persistent, crash-resilient file transfer app. You declare intents ("these files should end up there") and Kip makes it happen — surviving reboots, network drops, drive disconnects. Errors resolve silently when possible; when they can't, they queue up for human review with full file previews and clear resolution options.
 
 ## Core Architecture (This was written before a ton of development was done and needs to be updated, but as far as underlying goals, the below content is still accurate)
 
@@ -38,8 +38,8 @@ Wide format support including:
 - Moderate concurrency
 
 **Ninja**
-- macOS: `setiopolicy_np(IOPOL_THROTTLE)` — OS deprioritizes Ferry I/O automatically
-- Aggressively yields under load. When system is idle, OS naturally gives Ferry full throughput
+- macOS: `setiopolicy_np(IOPOL_THROTTLE)` — OS deprioritizes Kip I/O automatically
+- Aggressively yields under load. When system is idle, OS naturally gives Kip full throughput
 - Same mechanism Time Machine uses
 - Sacrifices significant speed when computer is under reasonable load
 
@@ -60,7 +60,7 @@ Wide format support including:
 - Conflict resolution: side-by-side source vs dest preview
 
 ### 6. File Index & Deduplication (SurrealDB)
-- Every file Ferry touches gets recorded with a content hash
+- Every file Kip touches gets recorded with a content hash
 - Enables high-probability duplicate detection across all machines/drives
 - Change detection: know when a file has been modified since last transfer
 - Self-maintaining: no expiration-based deletion. Records clean up when files are confirmed gone from all known locations (or similar sensible policy — TBD)
@@ -68,11 +68,11 @@ Wide format support including:
 - Soon you will also be able to tell kip when you think a node (file, group, or directory) contains a duplicate, and kip will check, if it finds some it tells you, if it was wrong, which it shouldn't ever be, but if it is, then you can force it and overwrite one.
 
 
-Machines/drives are first-class entities. When a drive connects or a machine comes online, Ferry detects it and resumes any pending intents targeting that location.
+Machines/drives are first-class entities. When a drive connects or a machine comes online, Kip detects it and resumes any pending intents targeting that location.
 
 ## Key Principles
 - Intent-based, not action-based ("this folder should be on that drive" vs "copy this file now")
 - Survives anything: reboot, drive pull, network drop, tunnel timeout
 - Errors resolve automatically when possible; human review only when necessary
-- No unnecessary knobs or sliders — Ferry figures out the optimal approach
+- No unnecessary knobs or sliders — Kip figures out the optimal approach
 - Preview as many file types as possible for informed conflict resolution

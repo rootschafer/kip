@@ -1,10 +1,10 @@
-# Ferry
+# Kip
 
-Ferry is a file transfer orchestrator built in Rust with a Dioxus native UI. It was born from a real emergency: 6 hours of manually babysitting 40+ rsync processes across USB drives and flaky SSH tunnels, restarting failed transfers, tracking what went where, and praying nothing got missed before wiping a Mac. Never again.
+Kip is a file transfer orchestrator built in Rust with a Dioxus native UI. It was born from a real emergency: 6 hours of manually babysitting 40+ rsync processes across USB drives and flaky SSH tunnels, restarting failed transfers, tracking what went where, and praying nothing got missed before wiping a Mac. Never again.
 
 ## The Core Idea
 
-Ferry is **intent-based**, not action-based. The user doesn't say "copy this file now." They say "these files should end up there" and Ferry makes it happen — across reboots, drive disconnects, network drops, whatever. The only time Ferry bothers the user is when it genuinely can't decide what to do (conflict, permissions, disk full). Everything else resolves silently.
+Kip is **intent-based**, not action-based. The user doesn't say "copy this file now." They say "these files should end up there" and Kip makes it happen — across reboots, drive disconnects, network drops, whatever. The only time Kip bothers the user is when it genuinely can't decide what to do (conflict, permissions, disk full). Everything else resolves silently.
 
 Think of it as a transfer daemon with a review queue UI. Set it and forget it. Come back to either "done" or a short list of decisions.
 
@@ -12,12 +12,12 @@ Think of it as a transfer daemon with a review queue UI. Set it and forget it. C
 
 The design is thorough. Read before writing code:
 
-1. `FERRY_DESIGN_1.md` — Vision, core concepts, speed modes, principles
-2. `FERRY_DESIGN_2_DATA_MODEL.md` — SurrealDB schema, entities, graph relationships, self-maintaining file index
-3. `FERRY_DESIGN_3_INTENT_LIFECYCLE.md` — State machine (idle → scanning → transferring → complete), triggers, concurrency
-4. `FERRY_DESIGN_4_ARCHITECTURE.md` — Menu bar app, thread model, copy pipeline, speed modes, device detection
-5. `FERRY_DESIGN_5_ERROR_HANDLING.md` — Error classification, auto-resolve vs review, conflict detection, notification strategy
-6. `FERRY_DESIGN_6_MVP.md` — Phased roadmap, module structure, build order
+1. `KIP_DESIGN_1.md` — Vision, core concepts, speed modes, principles
+2. `KIP_DESIGN_2_DATA_MODEL.md` — SurrealDB schema, entities, graph relationships, self-maintaining file index
+3. `KIP_DESIGN_3_INTENT_LIFECYCLE.md` — State machine (idle → scanning → transferring → complete), triggers, concurrency
+4. `KIP_DESIGN_4_ARCHITECTURE.md` — Menu bar app, thread model, copy pipeline, speed modes, device detection
+5. `KIP_DESIGN_5_ERROR_HANDLING.md` — Error classification, auto-resolve vs review, conflict detection, notification strategy
+6. `KIP_DESIGN_6_MVP.md` — Phased roadmap, module structure, build order
 
 ## Decisions That Are Final
 
@@ -56,7 +56,7 @@ Follow this sequence — each step builds on the last:
 
 ## UI Personality
 
-The Blast button should be red and look playfully dangerous. The rest of the UI should be clean and minimal — Ferry gets out of the way. The review queue is the hero feature: expandable cards with file previews, clear resolution buttons, batch actions for similar errors.
+The Blast button should be red and look playfully dangerous. The rest of the UI should be clean and minimal — Kip gets out of the way. The review queue is the hero feature: expandable cards with file previews, clear resolution buttons, batch actions for similar errors.
 
 ## What AGENTS.md Is
 

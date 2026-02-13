@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use surrealdb::types::RecordId;
 
-/// Every file Ferry has ever touched.
+/// Every file Kip has ever touched.
 /// The basis for dedup and change detection.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FileRecord {

@@ -361,7 +361,7 @@ mod tests {
 
     #[test]
     fn nonexistent_path_errors() {
-        let err = walk_source("/tmp/ferry_definitely_not_real").unwrap_err();
+        let err = walk_source("/tmp/kip_definitely_not_real").unwrap_err();
         assert!(matches!(err, ScanError::SourcePathNotExists(_)));
     }
 

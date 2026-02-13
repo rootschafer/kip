@@ -1,5 +1,5 @@
 [package]
-name = "ferry"
+name = "kip"
 version = "0.1.0"
 authors = ["Anders <git@anders.place>"]
 edition = "2021"

@@ -10,22 +10,22 @@ pub struct DbHandle {
 }
 
 /// Resolve the database file path.
-/// ~/Library/Application Support/Ferry/ferry.db
+/// ~/Library/Application Support/kip/kip.db
 fn db_path() -> PathBuf {
     let home = std::env::var("HOME").expect("HOME not set");
     let path = PathBuf::from(home)
         .join("Library")
         .join("Application Support")
-        .join("Ferry");
-    std::fs::create_dir_all(&path).expect("Failed to create Ferry data directory");
-    path.join("ferry.db")
+        .join("Kip");
+    std::fs::create_dir_all(&path).expect("Failed to create Kip data directory");
+    path.join("kip.db")
 }
 
 /// Initialize the database: connect, select ns/db, run migrations, bootstrap machine.
 pub async fn init() -> Result<DbHandle, Box<dyn std::error::Error>> {
     let path = db_path();
     let db = Surreal::new::<SurrealKv>(path).await?;
-    db.use_ns("ferry").use_db("ferry").await?;
+    db.use_ns("kip").use_db("kip").await?;
 
     run_migrations(&db).await?;
     bootstrap_local_machine(&db).await?;

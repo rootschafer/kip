@@ -1,4 +1,4 @@
-# Ferry — Mapping Graph UI
+# Kip — Mapping Graph UI
 
 ## The Problem with "New Intent"
 
@@ -7,11 +7,11 @@ The current intent creation flow — "type a source path, type a dest path, clic
 1. **Nobody wants to type paths.** File pickers are marginally better but still friction-heavy for bulk setup.
 2. **It's backwards.** The user's mental model isn't "copy `/Users/anders/projects` to `/Volumes/SOMETHING/projects`." It's **"my projects should exist on both my MacBook and SOMETHING."** The directionality is incidental — what matters is the mapping.
 
-Ferry should match that mental model.
+Kip should match that mental model.
 
 ## The Graph
 
-The core UI is a **2D mapping graph**. Nodes are locations (directories or file paths on a Machine/Drive). Edges are relationships between them — Ferry's job is to **resolve** every edge.
+The core UI is a **2D mapping graph**. Nodes are locations (directories or file paths on a Machine/Drive). Edges are relationships between them — Kip's job is to **resolve** every edge.
 
 ```
 ┌──────────────────┐         ┌──────────────────┐
@@ -115,10 +115,10 @@ The "Review Each" option walks through each conflicted file individually.
 3. Node appears in the container
 4. User drags from one node to another to create an edge
 5. Edge starts as directional (arrow from source to dest)
-6. Ferry begins scanning and transferring
+6. Kip begins scanning and transferring
 
 ### Removing a Mapping
-- Click an edge → delete. This does NOT delete files — it just means Ferry stops caring about keeping them in sync.
+- Click an edge → delete. This does NOT delete files — it just means Kip stops caring about keeping them in sync.
 - Click a node → delete. Removes the node and all its edges. Again, files are untouched.
 
 ### Discovering Machines/Drives
@@ -156,7 +156,7 @@ Each Machine/Drive gets a **distinct color** that carries through:
 This makes it instantly visually parseable — you can glance at any edge and know "blue machine → orange drive" without reading labels. Colors are assigned automatically from a palette designed for contrast against the dark background.
 
 **Layout persistence:**
-Node and container positions are stored in SurrealDB. The graph looks the same every time you open Ferry. Force simulation only runs when nodes are added/removed or the user drags something — it's not constantly animating.
+Node and container positions are stored in SurrealDB. The graph looks the same every time you open Kip. Force simulation only runs when nodes are added/removed or the user drags something — it's not constantly animating.
 
 **Edge routing:**
 Edges route as bezier curves between containers. When many edges connect the same two machines, they fan out slightly to remain individually selectable.
@@ -176,7 +176,7 @@ DEFINE FIELD initial_sync_complete ON intent TYPE bool DEFAULT false;
 -- Both sides are equal after initial sync.
 ```
 
-No other schema changes needed — the existing Location → Intent → TransferJob pipeline still works. Bidirectional sync just means when a change is detected on either side, Ferry creates jobs to propagate it to the other.
+No other schema changes needed — the existing Location → Intent → TransferJob pipeline still works. Bidirectional sync just means when a change is detected on either side, Kip creates jobs to propagate it to the other.
 
 ## What This Replaces
 

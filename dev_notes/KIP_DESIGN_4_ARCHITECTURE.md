@@ -1,12 +1,12 @@
-# Ferry Architecture
+# Kip Architecture
 
 ## Process Model: Menu Bar App
 
-Ferry runs as a single-process **menu bar application**. Not a separate daemon. Not a window you have to keep open.
+Kip runs as a single-process **menu bar application**. Not a separate daemon. Not a window you have to keep open.
 
 ```
 ┌──────────────────────────────────────────────┐
-│              Ferry Process                    │
+│              Kip Process                    │
 │                                               │
 │  ┌─────────────┐   ┌──────────────────────┐  │
 │  │  Menu Bar    │   │  Transfer Engine     │  │
@@ -28,7 +28,7 @@ Ferry runs as a single-process **menu bar application**. Not a separate daemon. 
 │                                               │
 │  ┌──────────────────────────────────────┐     │
 │  │  SurrealDB (embedded, on-disk)       │     │
-│  │  ~/Library/Application Support/Ferry/ │     │
+│  │  ~/Library/Application Support/Kip/ │     │
 │  └──────────────────────────────────────┘     │
 └──────────────────────────────────────────────┘
 ```
@@ -37,17 +37,17 @@ Ferry runs as a single-process **menu bar application**. Not a separate daemon. 
 - No IPC to design. Transfer engine and UI share the same SurrealDB instance.
 - LIVE SELECT gives the UI reactivity without polling or message passing.
 - Menu bar presence means it's "always running" without feeling like a window you need to manage.
-- If the user force-quits: on next launch, Ferry reads persisted state and resumes. Same resilience as a daemon, simpler architecture.
+- If the user force-quits: on next launch, Kip reads persisted state and resumes. Same resilience as a daemon, simpler architecture.
 
 ### Why NOT a daemon?
 - launchd daemon + separate GUI = IPC layer (Unix socket, gRPC, etc). Complexity for no user benefit.
 - The menu bar app *is* the daemon. It launches at login, lives in the menu bar, does its job.
-- If we ever need to split (e.g., for a CLI tool that talks to Ferry), we extract the engine into a library. But not now.
+- If we ever need to split (e.g., for a CLI tool that talks to Kip), we extract the engine into a library. But not now.
 
 ## Menu Bar Behavior
 
 ### Icon States
-- **Idle**: Static ferry/boat icon
+- **Idle**: Static kip/boat icon
 - **Transferring**: Animated icon (subtle pulse or progress indicator)
 - **Needs Review**: Badge with count (like mail unread count)
 - **Error**: Red dot
@@ -258,9 +258,9 @@ Run every 60s for known machines. When a machine transitions online → check fo
 ## Data Directory
 
 ```
-~/Library/Application Support/Ferry/
-├── ferry.db           # SurrealDB on-disk database
-├── ferry.log          # Application log (rotated)
+~/Library/Application Support/Kip/
+├── kip.db           # SurrealDB on-disk database
+├── kip.log          # Application log (rotated)
 └── config.toml        # User preferences (speed mode default, etc.)
 ```
 

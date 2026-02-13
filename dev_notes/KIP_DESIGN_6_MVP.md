@@ -1,4 +1,4 @@
-# Ferry MVP Roadmap
+# Kip MVP Roadmap
 
 ## Guiding Principle
 Build the smallest thing that would have saved Anders 6 hours tonight.
@@ -52,7 +52,7 @@ The scenario: "I need to copy 45GB of app data to a USB drive and a remote serve
 - Scheduling
 
 ### Definition of Done:
-You can drag a folder onto Ferry, point it at a USB drive, and walk away. Come back to find everything copied, or a short list of problems with clear fix-it buttons. Pull the drive mid-copy, plug it back in, Ferry picks up where it left off. Reboot your Mac, Ferry resumes on login.
+You can drag a folder onto Kip, point it at a USB drive, and walk away. Come back to find everything copied, or a short list of problems with clear fix-it buttons. Pull the drive mid-copy, plug it back in, Kip picks up where it left off. Reboot your Mac, Kip resumes on login.
 
 ---
 
@@ -120,9 +120,9 @@ You can drag a folder onto Ferry, point it at a USB drive, and walk away. Come b
 - Use existing cloud SDKs
 
 **CLI:**
-- `ferry add /source /dest` — create intent from terminal
-- `ferry status` — show active transfers
-- `ferry review` — interactive error resolution
+- `kip add /source /dest` — create intent from terminal
+- `kip status` — show active transfers
+- `kip review` — interactive error resolution
 
 ---
 

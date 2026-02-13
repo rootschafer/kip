@@ -146,13 +146,13 @@ mod tests {
     fn test_compute_depth() {
         let paths = vec![
             "/Users/anders/projects",
-            "/Users/anders/projects/ferry",
-            "/Users/anders/projects/ferry/src",
+            "/Users/anders/projects/kip",
+            "/Users/anders/projects/kip/src",
             "/Users/anders/music",
         ];
         assert_eq!(compute_depth("/Users/anders/projects", &paths), 0);
-        assert_eq!(compute_depth("/Users/anders/projects/ferry", &paths), 1);
-        assert_eq!(compute_depth("/Users/anders/projects/ferry/src", &paths), 2);
+        assert_eq!(compute_depth("/Users/anders/projects/kip", &paths), 1);
+        assert_eq!(compute_depth("/Users/anders/projects/kip/src", &paths), 2);
         assert_eq!(compute_depth("/Users/anders/music", &paths), 0);
     }
 }

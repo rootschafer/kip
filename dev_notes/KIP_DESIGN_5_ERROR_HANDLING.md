@@ -2,9 +2,9 @@
 
 ## Philosophy
 
-Most file transfer errors are boring and fixable. Ferry handles them silently. The few that actually need a human get a clear, previewable, actionable review card.
+Most file transfer errors are boring and fixable. Kip handles them silently. The few that actually need a human get a clear, previewable, actionable review card.
 
-The user should never think about errors unless Ferry genuinely can't decide what to do.
+The user should never think about errors unless Kip genuinely can't decide what to do.
 
 ## Error Classification
 
@@ -71,7 +71,7 @@ When multiple items have the same error kind:
 
 ## Conflict Detection
 
-Before writing a file, Ferry checks the destination:
+Before writing a file, Kip checks the destination:
 
 ```rust
 enum ConflictCheck {
@@ -122,11 +122,11 @@ The user can configure per-intent conflict policy:
 | Device disconnected mid-transfer | Toast: "SOMETHING disconnected, 5 transfers paused" |
 | Error auto-resolved | Nothing. Silent. |
 
-Notifications respect macOS notification settings. The user can disable them in Ferry preferences.
+Notifications respect macOS notification settings. The user can disable them in Kip preferences.
 
 ## Error Recovery Across Restarts
 
-On launch, Ferry queries:
+On launch, Kip queries:
 
 ```surql
 -- Find all jobs that were mid-transfer when we last quit/crashed

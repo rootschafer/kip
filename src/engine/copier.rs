@@ -388,7 +388,7 @@ mod tests {
 
     #[test]
     fn hash_file_not_found() {
-        let err = hash_file("/tmp/ferry_definitely_not_real.txt").unwrap_err();
+        let err = hash_file("/tmp/kip_definitely_not_real.txt").unwrap_err();
         assert!(matches!(err, CopyError::SourceNotFound(_)));
     }
 

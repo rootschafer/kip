@@ -1,10 +1,10 @@
-# Ferry Data Model (SurrealDB)
+# Kip Data Model (SurrealDB)
 
 ## Why SurrealDB
 
 SurrealDB isn't just "a database we're using" — it's architecturally load-bearing:
 
-1. **Embedded mode**: Runs in-process via `surrealdb::engine::local::Db`. No separate server to manage. Ferry is one binary.
+1. **Embedded mode**: Runs in-process via `surrealdb::engine::local::Db`. No separate server to manage. Kip is one binary.
 2. **Graph relations**: `RELATE file -> exists_at -> location` — perfect for "where does this file live across all my machines?"
 3. **LIVE SELECT**: Real-time subscriptions. The GUI subscribes to `LIVE SELECT * FROM transfer_job WHERE status = 'transferring'` and gets pushed updates without polling. The daemon writes, the GUI reacts. Zero coupling.
 4. **Multi-model**: Documents for flexible metadata, graphs for relationships, traditional queries for reporting.
@@ -12,14 +12,14 @@ SurrealDB isn't just "a database we're using" — it's architecturally load-bear
 ## Entities
 
 ### Machine
-A computer or server Ferry knows about.
+A computer or server Kip knows about.
 
 ```surql
 DEFINE TABLE machine SCHEMAFULL;
 DEFINE FIELD name ON machine TYPE string;            -- "MacBook", "derver"
 DEFINE FIELD kind ON machine TYPE string;            -- "local", "remote"
 DEFINE FIELD hostname ON machine TYPE option<string>; -- for remote: "ssh.anders.place"
-DEFINE FIELD is_current ON machine TYPE bool;         -- is this the machine Ferry is running on?
+DEFINE FIELD is_current ON machine TYPE bool;         -- is this the machine Kip is running on?
 DEFINE FIELD ssh_user ON machine TYPE option<string>;
 DEFINE FIELD ssh_key_path ON machine TYPE option<string>;
 DEFINE FIELD ssh_proxy ON machine TYPE option<string>; -- e.g. cloudflared proxy command
@@ -42,7 +42,7 @@ DEFINE FIELD last_seen ON drive TYPE datetime;
 DEFINE FIELD limitations ON drive TYPE option<object>; -- { max_file_size: 4294967295 } for FAT32
 ```
 
-**Why UUID?** The user might rename a drive or mount it at a different path. UUID is stable. When a drive mounts, Ferry matches it by UUID, updates the mount_point, sets `connected = true`, and resumes any waiting intents.
+**Why UUID?** The user might rename a drive or mount it at a different path. UUID is stable. When a drive mounts, Kip matches it by UUID, updates the mount_point, sets `connected = true`, and resumes any waiting intents.
 
 ### Location
 The fundamental building block. Always: *something* + *path*.
@@ -114,7 +114,7 @@ DEFINE FIELD created_at ON transfer_job TYPE datetime;
 ```
 
 ### FileRecord
-Every file Ferry has ever touched. The basis for dedup and change detection.
+Every file Kip has ever touched. The basis for dedup and change detection.
 
 ```surql
 DEFINE TABLE file_record SCHEMAFULL;
@@ -134,7 +134,7 @@ This is where SurrealDB's graph model shines.
 DEFINE TABLE exists_at SCHEMAFULL;
 DEFINE FIELD path ON exists_at TYPE string;              -- path within the location
 DEFINE FIELD modified_at ON exists_at TYPE datetime;     -- file's mtime
-DEFINE FIELD verified_at ON exists_at TYPE datetime;     -- when Ferry last confirmed this
+DEFINE FIELD verified_at ON exists_at TYPE datetime;     -- when Kip last confirmed this
 DEFINE FIELD stale ON exists_at TYPE bool DEFAULT false;  -- true if unverified after device reconnect
 
 -- Usage: RELATE file_record:abc -> exists_at -> location:xyz
@@ -178,12 +178,12 @@ DEFINE FIELD dest_modified ON review_item TYPE option<datetime>;
 The file index must stay accurate without expiration-based deletion. Here's how:
 
 1. **On transfer**: Hash file during copy. Create/update `file_record` and `exists_at` edge.
-2. **On device connect**: Mark all `exists_at` edges for that device's locations as `stale = true`. As Ferry encounters each file (during scan or transfer), verify and mark `stale = false`.
+2. **On device connect**: Mark all `exists_at` edges for that device's locations as `stale = true`. As Kip encounters each file (during scan or transfer), verify and mark `stale = false`.
 3. **On file watch event** (local/mounted): Update `exists_at` edge immediately. If file deleted, remove the edge. If `file_record` has zero remaining edges, it's an orphan — archive or delete it.
 4. **On intent scan**: Verify files at source location, update records.
 5. **Orphan cleanup**: Periodically (or on demand), find `file_record` nodes with no `exists_at` edges → delete them.
 
-No timers. No TTLs. Records exist as long as Ferry has evidence the file exists somewhere. Evidence disappears → record disappears.
+No timers. No TTLs. Records exist as long as Kip has evidence the file exists somewhere. Evidence disappears → record disappears.
 
 ## Key Queries
 

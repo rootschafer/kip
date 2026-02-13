@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use surrealdb::types::RecordId;
 
-/// A computer or server Ferry knows about.
+/// A computer or server Kip knows about.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Machine {
     #[serde(skip_serializing)]
@@ -41,7 +41,7 @@ pub struct Drive {
 }
 
 /// A machine/drive + path composition.
-/// The fundamental "where" in Ferry.
+/// The fundamental "where" in Kip.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Location {
     #[serde(skip_serializing)]
