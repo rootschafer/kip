@@ -173,6 +173,20 @@ DEFINE FIELD dest_hash ON review_item TYPE option<string>;
 DEFINE FIELD dest_modified ON review_item TYPE option<datetime>;
 ```
 
+### NodeGroup (NOT YET IN SCHEMA)
+User-created grouping of locations for visual organization in the graph.
+
+```surql
+DEFINE TABLE node_group SCHEMAFULL;
+DEFINE FIELD name ON node_group TYPE string;              -- user label: "Projects", "Media"
+DEFINE FIELD members ON node_group TYPE array<record<location>>;
+DEFINE FIELD parent_group ON node_group TYPE option<record<node_group>>; -- nested groups
+DEFINE FIELD collapsed ON node_group TYPE bool DEFAULT true;
+DEFINE FIELD created_at ON node_group TYPE datetime;
+```
+
+Groups are circles in the graph UI (same shape as directory nodes). Click once to see children orbit around, click again to enter. See `KIP_DESIGN_7_MAPPING_GRAPH.md` for visual behavior.
+
 ## Self-Maintaining Index
 
 The file index must stay accurate without expiration-based deletion. Here's how:

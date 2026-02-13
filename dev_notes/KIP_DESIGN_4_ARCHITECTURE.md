@@ -259,22 +259,29 @@ Run every 60s for known machines. When a machine transitions online → check fo
 
 ```
 ~/Library/Application Support/Kip/
-├── kip.db           # SurrealDB on-disk database
-├── kip.log          # Application log (rotated)
-└── config.toml        # User preferences (speed mode default, etc.)
+├── kip.db/          # SurrealDB on-disk database (SurrealKV directory)
+├── kip.log          # Application log (tracing-appender, non-rotating)
+└── config.toml      # User preferences (future)
 ```
 
-## Crate Dependencies (estimated)
+## Crate Dependencies (actual)
 
 ```toml
 [dependencies]
-dioxus = { version = "0.7.1", features = ["desktop", "router"] }
-surrealdb = { version = "2", features = ["kv-rocksdb"] }  # embedded mode
-blake3 = "1"                    # fast hashing
-notify = "7"                    # filesystem watcher
+dioxus = { version = "0.7.3", features = ["desktop", "router"] }
+surrealdb = { version = "=3.0.0-beta.3", features = ["kv-surrealkv"] }
+surrealdb-types = "=3.0.0-beta.4"  # needed for #[derive(SurrealValue)]
+blake3 = "1"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+walkdir = "2"
+thiserror = "2"
+plist = "1"                     # parsing diskutil output
+tracing = "0.1"
+tracing-subscriber = "0.3"
+tracing-appender = "0.2"
 
 # File preview (phase 2+)
 # image = "0.25"
@@ -282,3 +289,5 @@ serde_json = "1"
 # wgpu = "24"
 # gltf = "1"
 ```
+
+**Note**: SurrealDB 3.0.0-beta.4 has a broken dependency (`affinitypool ^0.4.0` not published) — pinned to beta.3. `surrealdb-types` must be a direct dependency because the `SurrealValue` derive macro references it by crate name.

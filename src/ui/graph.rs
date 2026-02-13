@@ -167,7 +167,6 @@ pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
                 class: "graph-wrapper",
                 // Mouse handlers for drag/lasso
                 onmousedown: {
-                    let nodes_for_click = nodes.clone();
                     move |e: MouseEvent| {
                         // Shift+drag on empty space = lasso
                         if e.modifiers().shift() {

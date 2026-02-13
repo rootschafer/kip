@@ -29,12 +29,24 @@ The scenario: "I need to copy 45GB of app data to a USB drive and a remote serve
 - [x] Blast (hill-climbing concurrency tuner)
 - [ ] Ninja (Phase 2 — Normal is fine for MVP)
 
-**UI:**
-- [x] Menu bar icon with transfer status
-- [x] Main window: intent list with progress bars
-- [x] "New intent" flow: pick source folder, pick destination, go
-- [x] Review queue: list of errors with resolution buttons
-- [x] Speed mode toggle (Normal / Blast)
+**UI — Mapping Graph (replaced original dashboard):**
+- [x] Glassmorphic visual design (iOS-style, backdrop-filter blur, CSS variables)
+- [x] Machine/drive containers with color-coded headers
+- [x] Location nodes inside containers (files and directories)
+- [x] Path containment detection with visual nesting (indented nodes)
+- [x] Drag-to-connect edge creation (bezier curves, colored by intent status)
+- [x] Native file picker for adding nodes (blue "+" button → pick machine → pick file)
+- [x] Remote machine creation form (name, hostname, SSH user)
+- [x] Shift+click multi-select
+- [x] Shift+drag lasso selection
+- [x] Global status indicator (green/red dot with review item count)
+- [x] Review queue component (error list with resolution buttons)
+- [x] Errors logged to tracing, never shown in UI
+- [ ] Grouping (select nodes → group → collapse/expand)
+- [ ] Central "Output" node (merge point)
+- [ ] Per-node/group error badges
+- [ ] Edge click/select/delete
+- [ ] Node delete / context menu
 
 **File index:**
 - [x] Record every file with blake3 hash in SurrealDB
@@ -42,7 +54,7 @@ The scenario: "I need to copy 45GB of app data to a USB drive and a remote serve
 - [ ] Duplicate detection UI (Phase 2 — data is collected though)
 
 **NOT in MVP:**
-- Remote machines (SSH)
+- Remote machines (SSH transfer — containers can be added but transfer is local-only)
 - File preview
 - Sync intents (only one-shot)
 - Ninja mode
@@ -50,13 +62,14 @@ The scenario: "I need to copy 45GB of app data to a USB drive and a remote serve
 - Duplicate detection UI
 - Include/exclude glob patterns
 - Scheduling
+- Force-directed graph layout
 
 ### Definition of Done:
 You can drag a folder onto Kip, point it at a USB drive, and walk away. Come back to find everything copied, or a short list of problems with clear fix-it buttons. Pull the drive mid-copy, plug it back in, Kip picks up where it left off. Reboot your Mac, Kip resumes on login.
 
 ---
 
-## Phase 2: "Remote + Ninja"
+## Phase 2: "Remote + Ninja + Graph Polish"
 
 **Remote machines:**
 - SSH/SFTP transfer backend
@@ -68,6 +81,18 @@ You can drag a folder onto Kip, point it at a USB drive, and walk away. Come bac
 **Ninja mode:**
 - `setiopolicy_np(IOPOL_THROTTLE)` on worker threads
 - 1-2 concurrent jobs max
+
+**Graph features:**
+- Grouping (select → group → collapse/expand, edge merging)
+- Central "Output" node
+- Per-node/group error badges at top-left corner
+- Force-directed layout (with columnar seed for small graphs)
+- Layout persistence (positions saved to SurrealDB)
+- Edge click/select/delete
+- Node context menu (delete, rename label, etc.)
+- Edge state animations (pulse for active transfers)
+- Color-coded edge gradients (source color → dest color)
+- Finder drag-and-drop onto graph
 
 **File preview (basics):**
 - Images: PNG, JPG, WebP, SVG inline preview
@@ -126,53 +151,47 @@ You can drag a folder onto Kip, point it at a USB drive, and walk away. Come bac
 
 ---
 
-## Module Structure (MVP)
+## Module Structure (current)
 
 ```
 src/
-├── main.rs                 # Entry point, Dioxus launch
-├── app.rs                  # Root Dioxus component
-├── db.rs                   # SurrealDB setup, migrations, queries
+├── main.rs                 # Entry point, Dioxus launch, tracing/logging setup
+├── app.rs                  # Root Dioxus component (header + graph + review queue)
+├── db.rs                   # SurrealDB setup, schema (DEFINE statements), bootstrap
 ├── engine/
-│   ├── mod.rs              # Transfer coordinator
+│   ├── mod.rs
 │   ├── copier.rs           # Chunked file copy + blake3 pipeline
 │   ├── scanner.rs          # Directory enumeration, delta computation
 │   ├── tuner.rs            # Blast mode hill-climbing concurrency
 │   └── scheduler.rs        # Job queue, priority ordering
 ├── devices/
 │   ├── mod.rs
-│   └── macos.rs            # DiskArbitration drive detection
+│   └── macos.rs            # DiskArbitration drive detection (polls /Volumes/)
 ├── models/
 │   ├── mod.rs
-│   ├── intent.rs           # Intent struct + lifecycle transitions
-│   ├── job.rs              # TransferJob struct
-│   ├── location.rs         # Location, Machine, Drive
-│   ├── file_record.rs      # FileRecord + exists_at
-│   └── review.rs           # ReviewItem + resolution types
+│   ├── intent.rs           # Intent, IntentStatus, IntentKind, SpeedMode
+│   ├── job.rs              # TransferJob, JobStatus
+│   ├── location.rs         # Location, Machine, Drive structs
+│   ├── file_record.rs      # FileRecord + ExistsAt
+│   └── review.rs           # ReviewItem, ErrorKind
 ├── ui/
 │   ├── mod.rs
-│   ├── menu_bar.rs         # Menu bar icon + quick menu
-│   ├── dashboard.rs        # Main intent list + progress
-│   ├── new_intent.rs       # Intent creation flow
-│   ├── review_queue.rs     # Error review list
-│   └── components/
-│       ├── progress_bar.rs
-│       ├── speed_toggle.rs
-│       └── file_picker.rs
+│   ├── graph.rs            # Mapping graph component (main workspace)
+│   ├── graph_types.rs      # ContainerView, NodeView, EdgeView, containment logic
+│   ├── review_queue.rs     # Error review list + resolution buttons
+│   └── file_picker.rs      # Custom column-view file picker (TODO)
 └── util/
-    ├── hash.rs             # blake3 helpers
-    └── fs.rs               # Filesystem utilities
+    └── mod.rs
 ```
 
-## What to Build First (order)
+## What to Build Next (priority order)
 
-1. **SurrealDB setup** (`db.rs`) — embedded instance, table definitions
-2. **Models** — Rust structs that map to SurrealDB tables
-3. **Scanner** — enumerate a directory into a file manifest
-4. **Copier** — chunked copy + hash, single file
-5. **Scheduler** — pull pending jobs, dispatch to copier, update status
-6. **Basic UI** — intent list, progress bar, "add intent" button
-7. **Device detection** — drive mount/unmount events
-8. **Review queue** — display errors, resolution buttons
-9. **Menu bar** — icon, status, quick actions
-10. **Blast mode tuner** — hill-climbing concurrency
+1. **Custom file picker** — Column view, glassmorphic, drag files/dirs onto workspace, persistent panes that minimize to bottom tabs. Replaces `rfd` native picker. See `KIP_DESIGN_8_FILE_PICKER.md`.
+2. **Circular directory/group nodes** — Directories and groups are circles, files are pills. Click circle once = children orbit around it. Click again = enter and show direct children inside.
+3. **Grouping** — Select nodes → group → collapse/expand. Edge merging. See `KIP_DESIGN_7_MAPPING_GRAPH.md`.
+4. **Central Output node** — Circular merge point at center of workspace.
+5. **Per-node error badges** — Red/yellow badges at node top-left corners.
+6. **Edge management** — Click to select, delete, view details.
+7. **Node management** — Right-click context menu (delete, rename).
+8. **Force-directed layout** — For larger graphs with many containers.
+9. **Layout persistence** — Save container/node positions to SurrealDB.

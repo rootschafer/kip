@@ -4,6 +4,17 @@ Authoritative reference for non-obvious patterns. Read the code first — this c
 
 ---
 
+## Build Commands
+
+**Always use `dx build` and `dx serve --platform desktop`**. Never use `cargo build` or `cargo run`. The Dioxus CLI handles asset bundling and platform-specific setup.
+
+```sh
+dx build                        # build
+dx serve --platform desktop     # run with hot reload
+```
+
+---
+
 ## Dioxus 0.7 RSX Gotchas
 
 - **No `cx`, `Scope`, or `use_state`**. Everything is signals and `#[component]` functions returning `Element`.

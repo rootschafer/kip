@@ -11,7 +11,16 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 
 fn main() {
-    let file_appender = tracing_appender::rolling::never(".", "kip.log");
+    let log_dir = {
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+        let dir = std::path::PathBuf::from(home)
+            .join("Library")
+            .join("Application Support")
+            .join("Kip");
+        std::fs::create_dir_all(&dir).ok();
+        dir
+    };
+    let file_appender = tracing_appender::rolling::never(log_dir, "kip.log");
     tracing_subscriber::registry()
       .with(tracing_subscriber::fmt::layer().with_writer(file_appender))
       .init();
