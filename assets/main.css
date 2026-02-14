@@ -284,7 +284,7 @@ body {
 .ws-node {
     position: absolute;
     cursor: grab;
-    transition: all 0.15s ease;
+    transition: all 0.3s ease; /* Increased transition time for smoother animation */
     user-select: none;
     --node-color: #ffffff; /* Default fallback color */
 }
@@ -357,20 +357,33 @@ body {
     border-color: var(--node-color);
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
 }
-.ws-dir .child-count {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-dim);
-    line-height: 1;
+.ws-dir .node-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 100%;
+    gap: 2px;
 }
 .ws-dir .node-label {
-    font-size: 8px;
-    max-width: 48px;
+    font-size: 10px;
+    max-width: 100%;
     text-align: center;
     line-height: 1.1;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: var(--text-muted);
+    color: var(--text);
+    word-break: break-word;
+    white-space: normal;
+    text-wrap: wrap;
+}
+.ws-dir .total-descendants {
+    font-size: 8px;
+    font-weight: 600;
+    color: var(--text-dim);
+    line-height: 1;
+    margin-top: -2px;
 }
 .ws-dir .node-handle {
     position: absolute;

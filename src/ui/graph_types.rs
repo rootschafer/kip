@@ -44,6 +44,7 @@ pub struct NodeView {
     pub is_expanded: bool,      // false = collapsed, true = expanded (inside view)
     pub is_orbit: bool,         // true = children fanned out around it (orbit view)
     pub child_count: usize,     // Number of direct children
+    pub total_descendants: usize, // Total count of all descendants (recursive)
 }
 
 #[derive(Debug, Clone, PartialEq)]

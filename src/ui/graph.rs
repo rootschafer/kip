@@ -6,7 +6,8 @@ use surrealdb::types::{RecordId, RecordIdKey, SurrealValue};
 use tracing::{error, info, warn};
 
 use crate::db::DbHandle;
-use crate::ui::file_picker::PickerManager;
+// use crate::ui::file_picker::{PickerManager, PickerManagerStoreExt};
+use crate::ui::file_picker::*;
 use crate::ui::graph_types::*;
 use crate::ui::container_components::*;
 
@@ -17,7 +18,6 @@ const GRID_SPACING_Y: f64 = 100.0;
 const WORKSPACE_PADDING: f64 = 40.0;
 const NODE_WIDTH_FILE: f64 = 150.0;
 const NODE_HEIGHT_FILE: f64 = 36.0;
-const NODE_SIZE_DIR: f64 = 56.0;
 
 // ─── Typed DB response structs ───────────────────────────────
 
@@ -59,6 +59,53 @@ struct ReviewCountRow {
     count: i64,
 }
 
+// ─── Graph Toolbar Component ──────────────────────────────────
+
+#[component]
+pub fn GraphToolbar(
+    containers: Vec<ContainerView>,
+    review_count: i64,
+    on_add_machine_click: EventHandler,
+    on_container_click: EventHandler<ContainerView>,
+) -> Element {
+    let status_class = if review_count > 0 { "status-indicator error" } else { "status-indicator ok" };
+    let status_count = review_count;
+
+    rsx! {
+		div { class: "graph-toolbar",
+			div { class: "{status_class}",
+				if status_count > 0 {
+					span { class: "status-count", "{status_count}" }
+					span { class: "status-label",
+						if status_count == 1 {
+							"issue"
+						} else {
+							"issues"
+						}
+					}
+				}
+			}
+			div { class: "machine-chips",
+				for container in containers.iter() {
+					MachineChip {
+						container: container.clone(),
+						on_click: move |c: ContainerView| {
+						    on_container_click.call(c);
+						},
+					}
+				}
+				button {
+					class: "btn-add",
+					onclick: move |_| {
+					    on_add_machine_click.call(());
+					},
+					"+"
+				}
+			}
+		}
+	}
+}
+
 // ─── Helpers ─────────────────────────────────────────────────
 
 pub(crate) fn rid_string(id: &RecordId) -> String {
@@ -95,17 +142,83 @@ pub(crate) enum DragState {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum AddPanelState {
+pub enum AddPanelState {
     Closed,
     AddMachine,
+}
+
+// ─── Toolbar: status + machine chips + add button ───
+#[component]
+pub fn GraphToolBar(
+    review_count: i64, 
+    // picker: Signal<PickerManager>, 
+    picker: Store<PickerManager>, 
+    machine_name: Signal<String>, 
+    machine_host: Signal<String>, 
+    machine_user: Signal<String>, 
+    add_panel: Signal<AddPanelState>, 
+    containers: Vec<ContainerView>
+) -> Element {
+    // let status_class = if review_count > 0 { "status-indicator error" } else { "status-indicator ok" };
+    // let status_count = review_count;
+
+    rsx! {
+		div { class: "graph-toolbar",
+			div {
+				// class: "{status_class}",
+				class: if review_count > 0 { "status-indicator error" } else { "status-indicator ok" },
+				if review_count > 0 {
+					span { class: "status-count",
+						// "{status_count}"
+						"{review_count}"
+					}
+					span { class: "status-label",
+						if review_count == 1 {
+							"issue"
+						} else {
+							"issues"
+						}
+					}
+				}
+			}
+			div { class: "machine-chips",
+				for container in containers.iter() {
+					MachineChip {
+						container: container.clone(),
+						on_click: move |c: ContainerView| {
+						    if !c.connected {
+						        warn!("cannot add to disconnected target");
+						        return;
+						    }
+						    let cid = rid_string(&c.id);
+						    let name = c.name.clone();
+						    let root = c.mount_point.clone().unwrap_or_else(|| "/".to_string());
+						    picker.open(cid, name, std::path::PathBuf::from(root));
+						},
+					}
+				}
+				button {
+					class: "btn-add",
+					onclick: move |_| {
+					    *machine_name.write() = String::new();
+					    *machine_host.write() = String::new();
+					    *machine_user.write() = String::new();
+					    *add_panel.write() = AddPanelState::AddMachine;
+					},
+					"+"
+				}
+			}
+		}
+	}
 }
 
 // ─── Component ───────────────────────────────────────────────
 
 #[component]
-pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
+// pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
+pub fn MappingGraph(picker: Store<PickerManager>, refresh_tick: u32, on_changed: EventHandler) -> Element {
     let db = use_context::<DbHandle>();
-    let mut picker = use_context::<PickerManager>();
+    // let mut picker = use_context::<PickerManager>();
     let mut drag = use_signal(|| DragState::None);
     let mut selected = use_signal(|| HashSet::<String>::new());
     let mut expansion_state = use_signal(|| HashMap::<String, (bool, bool)>::new());
@@ -124,6 +237,15 @@ pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
         async move { load_graph_data(&db).await }
     });
 
+    // let (containers, nodes, edges, review_count) = match &*graph_data.read() {
+    //     Some(Ok(data)) => data.clone(),
+    //     Some(Err(e)) => {
+    //         error!("graph load failed: {}", e);
+    //         (Vec::new(), Vec::new(), Vec::new(), 0i64)
+    //     }
+    //     None => (Vec::new(), Vec::new(), Vec::new(), 0i64),
+    // };
+
     let (containers, nodes, edges, review_count) = match &*graph_data.read() {
         Some(Ok(data)) => data.clone(),
         Some(Err(e)) => {
@@ -138,17 +260,21 @@ pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
         .map(|c| (rid_string(&c.id), c.color.clone()))
         .collect();
 
+    // Filter nodes based on expansion state (for enter view)
+    let visible_nodes = get_visible_nodes(&nodes, &expansion_state());
+
     let canvas_width = 1200.0_f64;
     let canvas_height = 800.0_f64;
 
-    let node_positions: Vec<(String, f64, f64)> = nodes
+    let node_positions: Vec<(String, f64, f64)> = visible_nodes
         .iter()
         .map(|n| (rid_string(&n.id), n.center_x(), n.center_y()))
         .collect();
 
     // Status indicator text
     let status_class = if review_count > 0 { "status-indicator error" } else { "status-indicator ok" };
-    let status_count = review_count;
+    let _status_class = status_class; // Suppress unused warning
+    let _status_count = review_count; // Suppress unused warning
 
     // Pre-compute lasso rect (RSX macro can't handle let bindings inside if-let)
     let (lasso_active, lasso_x, lasso_y, lasso_w, lasso_h) = {
@@ -166,274 +292,300 @@ pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
     };
 
     rsx! {
-        div {
-            class: "graph-area",
-            // ─── Toolbar: status + machine chips + add button ───
-            div {
-                class: "graph-toolbar",
-                div {
-                    class: "{status_class}",
-                    if review_count > 0 {
-                        span { class: "status-count", "{status_count}" }
-                        span {
-                            class: "status-label",
-                            if review_count == 1 { "issue" } else { "issues" }
-                        }
-                    }
-                }
-                div {
-                    class: "machine-chips",
-                    for container in containers.iter() {
-                        MachineChip {
-                            container: container.clone(),
-                            on_click: move |c: ContainerView| {
-                                if !c.connected {
-                                    warn!("cannot add to disconnected target");
-                                    return;
-                                }
-                                let cid = rid_string(&c.id);
-                                let name = c.name.clone();
-                                let root = c.mount_point.clone().unwrap_or_else(|| "/".to_string());
-                                picker.open(cid, name, std::path::PathBuf::from(root));
-                            },
-                        }
-                    }
-                    button {
-                        class: "btn-add",
-                        onclick: move |_| {
-                            *machine_name.write() = String::new();
-                            *machine_host.write() = String::new();
-                            *machine_user.write() = String::new();
-                            *add_panel.write() = AddPanelState::AddMachine;
-                        },
-                        "+"
-                    }
-                }
-            }
+		div { class: "graph-area",
+			// // ─── Toolbar: status + machine chips + add button ───
+			// div { class: "graph-toolbar",
+			// 	div { class: "{status_class}",
+			// 		if review_count > 0 {
+			// 			span { class: "status-count", "{status_count}" }
+			// 			span { class: "status-label",
+			// 				if review_count == 1 {
+			// 					"issue"
+			// 				} else {
+			// 					"issues"
+			// 				}
+			// 			}
+			// 		}
+			// 	}
+			// 	div { class: "machine-chips",
+			// 		for container in containers.iter() {
+			// 			MachineChip {
+			// 				container: container.clone(),
+			// 				on_click: move |c: ContainerView| {
+			// 				    if !c.connected {
+			// 				        warn!("cannot add to disconnected target");
+			// 				        return;
+			// 				    }
+			// 				    let cid = rid_string(&c.id);
+			// 				    let name = c.name.clone();
+			// 				    let root = c.mount_point.clone().unwrap_or_else(|| "/".to_string());
+			// 				    picker().open(cid, name, std::path::PathBuf::from(root));
+			// 				},
+			// 			}
+			// 		}
+			// 		button {
+			// 			class: "btn-add",
+			// 			onclick: move |_| {
+			// 			    *machine_name.write() = String::new();
+			// 			    *machine_host.write() = String::new();
+			// 			    *machine_user.write() = String::new();
+			// 			    *add_panel.write() = AddPanelState::AddMachine;
+			// 			},
+			// 			"+"
+			// 		}
+			// 	}
+			// }
+			GraphToolbar {
+				containers: containers.into(),
+				review_count: review_count.into(),
+				on_add_machine_click: move |_| {
+				    *machine_name.write() = String::new();
+				    *machine_host.write() = String::new();
+				    *machine_user.write() = String::new();
+				    *add_panel.write() = AddPanelState::AddMachine;
+				},
+				on_container_click: move |c: ContainerView| {
+				    if !c.connected {
+				        warn!("cannot add to disconnected target");
+				        return;
+				    }
+				    let cid = rid_string(&c.id);
+				    let name = c.name.clone();
+				    let root = c.mount_point.clone().unwrap_or_else(|| "/".to_string());
+				    // picker().open(cid, name, std::path::PathBuf::from(root));
+				    picker.open(cid, name, std::path::PathBuf::from(root));
+				},
+			}
 
-            // ─── Workspace: free nodes + SVG edges ───
-            div {
-                class: "workspace",
-                onmousedown: move |e: MouseEvent| {
-                    if e.modifiers().shift() {
-                        let coords = e.page_coordinates();
-                        *drag.write() = DragState::Lasso {
-                            start_x: coords.x,
-                            start_y: coords.y,
-                            current_x: coords.x,
-                            current_y: coords.y,
-                        };
-                    } else {
-                        selected.write().clear();
-                    }
-                },
-                onmousemove: move |e: MouseEvent| {
-                    let current = drag.read().clone();
-                    let coords = e.page_coordinates();
-                    match current {
-                        DragState::CreatingEdge { source_id, source_x, source_y, .. } => {
-                            *drag.write() = DragState::CreatingEdge {
-                                source_id,
-                                source_x,
-                                source_y,
-                                mouse_x: coords.x,
-                                mouse_y: coords.y,
-                            };
-                        }
-                        DragState::Lasso { start_x, start_y, .. } => {
-                            *drag.write() = DragState::Lasso {
-                                start_x,
-                                start_y,
-                                current_x: coords.x,
-                                current_y: coords.y,
-                            };
-                        }
-                        _ => {}
-                    }
-                },
-                onmouseup: {
-                    let nodes_for_lasso = nodes.clone();
-                    move |_| {
-                        let current = drag.read().clone();
-                        match current {
-                            DragState::CreatingEdge { .. } => {
-                                info!("drag cancelled (released on empty space)");
-                            }
-                            DragState::Lasso { start_x, start_y, current_x, current_y } => {
-                                let min_x = start_x.min(current_x);
-                                let max_x = start_x.max(current_x);
-                                let min_y = start_y.min(current_y);
-                                let max_y = start_y.max(current_y);
-                                let mut sel = selected.write();
-                                for node in &nodes_for_lasso {
-                                    let cx = node.center_x();
-                                    let cy = node.center_y();
-                                    if cx >= min_x && cx <= max_x && cy >= min_y && cy <= max_y {
-                                        sel.insert(rid_string(&node.id));
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                        *drag.write() = DragState::None;
-                    }
-                },
+			// ─── Workspace: free nodes + SVG edges ───
+			div {
+				class: "workspace",
+				onmousedown: move |e: MouseEvent| {
+				    if e.modifiers().shift() {
+				        let coords = e.page_coordinates();
+				        *drag.write() = DragState::Lasso {
+				            start_x: coords.x,
+				            start_y: coords.y,
+				            current_x: coords.x,
+				            current_y: coords.y,
+				        };
+				    } else {
+				        selected.write().clear();
+				    }
+				},
+				onmousemove: move |e: MouseEvent| {
+				    let current = drag.read().clone();
+				    let coords = e.page_coordinates();
+				    match current {
+				        DragState::CreatingEdge { source_id, source_x, source_y, .. } => {
+				            *drag.write() = DragState::CreatingEdge {
+				                source_id,
+				                source_x,
+				                source_y,
+				                mouse_x: coords.x,
+				                mouse_y: coords.y,
+				            };
+				        }
+				        DragState::Lasso { start_x, start_y, .. } => {
+				            *drag.write() = DragState::Lasso {
+				                start_x,
+				                start_y,
+				                current_x: coords.x,
+				                current_y: coords.y,
+				            };
+				        }
+				        _ => {}
+				    }
+				},
+				onmouseup: {
+				    let nodes_for_lasso = nodes.clone();
+				    move |_| {
+				        let current = drag.read().clone();
+				        match current {
+				            DragState::CreatingEdge { .. } => {
+				                info!("drag cancelled (released on empty space)");
+				            }
+				            DragState::Lasso { start_x, start_y, current_x, current_y } => {
+				                let min_x = start_x.min(current_x);
+				                let max_x = start_x.max(current_x);
+				                let min_y = start_y.min(current_y);
+				                let max_y = start_y.max(current_y);
+				                let mut sel = selected.write();
+				                for node in &nodes_for_lasso {
+				                    let cx = node.center_x();
+				                    let cy = node.center_y();
+				                    if cx >= min_x && cx <= max_x && cy >= min_y && cy <= max_y {
+				                        sel.insert(rid_string(&node.id));
+				                    }
+				                }
+				            }
+				            _ => {}
+				        }
+				        *drag.write() = DragState::None;
+				    }
+				},
 
-                // SVG overlay for edges + rubber band + lasso
-                svg {
-                    class: "workspace-svg",
-                    width: "{canvas_width}",
-                    height: "{canvas_height}",
-                    style: "width: {canvas_width}px; height: {canvas_height}px;",
-                    for edge in edges.iter() {
-                        {
-                            let source_pos = node_positions.iter().find(|(id, _, _)| *id == edge.source_id);
-                            let dest_pos = node_positions.iter().find(|(id, _, _)| *id == edge.dest_id);
-                            if let (Some((_, sx, sy)), Some((_, dx, dy))) = (source_pos, dest_pos) {
-                                let path_d = bezier_path(*sx, *sy, *dx, *dy);
-                                let color = edge_color(&edge.status);
-                                let width = if edge.status == "transferring" || edge.status == "scanning" { "3" } else { "2" };
-                                let key = rid_string(&edge.intent_id);
-                                rsx! {
-                                    path {
-                                        key: "{key}",
-                                        d: "{path_d}",
-                                        stroke: "{color}",
-                                        stroke_width: "{width}",
-                                        fill: "none",
-                                        stroke_linecap: "round",
-                                        opacity: "0.7",
-                                    }
-                                }
-                            } else {
-                                rsx! {}
-                            }
-                        }
-                    }
+				// SVG overlay for edges + rubber band + lasso
+				svg {
+					class: "workspace-svg",
+					width: "{canvas_width}",
+					height: "{canvas_height}",
+					style: "width: {canvas_width}px; height: {canvas_height}px;",
+					for edge in edges.iter() {
+						{
+						    let source_pos = node_positions.iter().find(|(id, _, _)| *id == edge.source_id);
+						    let dest_pos = node_positions.iter().find(|(id, _, _)| *id == edge.dest_id);
+						    if let (Some((_, sx, sy)), Some((_, dx, dy))) = (source_pos, dest_pos) {
+						        let path_d = bezier_path(*sx, *sy, *dx, *dy);
+						        let color = edge_color(&edge.status);
+						        let width = if edge.status == "transferring" || edge.status == "scanning" {
+						            "3"
+						        } else {
+						            "2"
+						        };
+						        let key = rid_string(&edge.intent_id);
+						        rsx! {
+							path {
+								key: "{key}",
+								d: "{path_d}",
+								stroke: "{color}",
+								stroke_width: "{width}",
+								fill: "none",
+								stroke_linecap: "round",
+								opacity: "0.7",
+							}
+						}
+						    } else {
+						        rsx! {}
+						    }
+						}
+					}
 
-                    // Rubber-band line
-                    if let DragState::CreatingEdge { source_x, source_y, mouse_x, mouse_y, .. } = *drag.read() {
-                        line {
-                            x1: "{source_x}",
-                            y1: "{source_y}",
-                            x2: "{mouse_x}",
-                            y2: "{mouse_y}",
-                            stroke: "#4a9eff",
-                            stroke_width: "2",
-                            stroke_dasharray: "6 4",
-                            stroke_linecap: "round",
-                            opacity: "0.8",
-                        }
-                    }
+					// Rubber-band line
+					if let DragState::CreatingEdge { source_x, source_y, mouse_x, mouse_y, .. } = *drag
+					    .read()
+					{
+						line {
+							x1: "{source_x}",
+							y1: "{source_y}",
+							x2: "{mouse_x}",
+							y2: "{mouse_y}",
+							stroke: "#4a9eff",
+							stroke_width: "2",
+							stroke_dasharray: "6 4",
+							stroke_linecap: "round",
+							opacity: "0.8",
+						}
+					}
 
-                    // Lasso rectangle
-                    if lasso_active {
-                        rect {
-                            x: "{lasso_x}",
-                            y: "{lasso_y}",
-                            width: "{lasso_w}",
-                            height: "{lasso_h}",
-                            fill: "rgba(74, 158, 255, 0.08)",
-                            stroke: "#4a9eff",
-                            stroke_width: "1",
-                            stroke_dasharray: "4 3",
-                            rx: "4",
-                        }
-                    }
-                }
+					// Lasso rectangle
+					if lasso_active {
+						rect {
+							x: "{lasso_x}",
+							y: "{lasso_y}",
+							width: "{lasso_w}",
+							height: "{lasso_h}",
+							fill: "rgba(74, 158, 255, 0.08)",
+							stroke: "#4a9eff",
+							stroke_width: "1",
+							stroke_dasharray: "4 3",
+							rx: "4",
+						}
+					}
+				}
 
-                // Free nodes in workspace
-                for node in nodes.iter() {
-                    {
-                        let color = color_map.get(&node.container_id).cloned().unwrap_or_default();
-                        rsx! {
-                            WorkspaceNode {
-                                node: node.clone(),
-                                color: color,
-                                selected: selected,
-                                drag: drag,
-                                expansion_state: expansion_state,
-                                db: db.clone(),
-                                on_changed: on_changed,
-                            }
-                        }
-                    }
-                }
-            }
+				// Free nodes in workspace
+				for node in visible_nodes.iter() {
+					{
+					    let color = color_map.get(&node.container_id).cloned().unwrap_or_default();
+					    rsx! {
+						WorkspaceNode {
+							node: node.clone(),
+							color,
+							selected,
+							drag,
+							expansion_state,
+							db: db.clone(),
+							on_changed,
+						}
+					}
+					}
+				}
+			}
 
-            // ─── Add machine panel ───
-            if *add_panel.read() == AddPanelState::AddMachine {
-                div {
-                    class: "add-panel-overlay",
-                    onclick: move |_| *add_panel.write() = AddPanelState::Closed,
-                    div {
-                        class: "add-panel",
-                        onclick: move |e: MouseEvent| e.stop_propagation(),
-                        div { class: "add-panel-title", "Add remote machine" }
-                        div { class: "add-machine-form",
-                            div { class: "form-field",
-                                label { "Name" }
-                                input {
-                                    value: "{machine_name}",
-                                    placeholder: "My Server",
-                                    oninput: move |e| *machine_name.write() = e.value(),
-                                }
-                            }
-                            div { class: "form-field",
-                                label { "Hostname" }
-                                input {
-                                    value: "{machine_host}",
-                                    placeholder: "192.168.1.100 or server.local",
-                                    oninput: move |e| *machine_host.write() = e.value(),
-                                }
-                            }
-                            div { class: "form-field",
-                                label { "SSH User" }
-                                input {
-                                    value: "{machine_user}",
-                                    placeholder: "root",
-                                    oninput: move |e| *machine_user.write() = e.value(),
-                                }
-                            }
-                            div { class: "form-actions-row",
-                                button {
-                                    class: "btn-ghost",
-                                    onclick: move |_| *add_panel.write() = AddPanelState::Closed,
-                                    "Cancel"
-                                }
-                                button {
-                                    class: "btn-primary",
-                                    disabled: machine_host().trim().is_empty(),
-                                    onclick: {
-                                        let db = db.clone();
-                                        move |_| {
-                                            let name = machine_name().trim().to_string();
-                                            let host = machine_host().trim().to_string();
-                                            let user = machine_user().trim().to_string();
-                                            let db = db.clone();
-                                            let on_changed = on_changed;
-                                            let mut add_panel = add_panel;
-                                            spawn(async move {
-                                                match add_remote_machine(&db, &name, &host, &user).await {
-                                                    Ok(()) => {
-                                                        info!("remote machine added: {}", host);
-                                                        on_changed.call(());
-                                                    }
-                                                    Err(e) => error!("add machine failed: {}", e),
-                                                }
-                                                *add_panel.write() = AddPanelState::Closed;
-                                            });
-                                        }
-                                    },
-                                    "Add"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+			// ─── Add machine panel ───
+			if *add_panel.read() == AddPanelState::AddMachine {
+				div {
+					class: "add-panel-overlay",
+					onclick: move |_| *add_panel.write() = AddPanelState::Closed,
+					div {
+						class: "add-panel",
+						onclick: move |e: MouseEvent| e.stop_propagation(),
+						div { class: "add-panel-title", "Add remote machine" }
+						div { class: "add-machine-form",
+							div { class: "form-field",
+								label { "Name" }
+								input {
+									value: "{machine_name}",
+									placeholder: "My Server",
+									oninput: move |e| *machine_name.write() = e.value(),
+								}
+							}
+							div { class: "form-field",
+								label { "Hostname" }
+								input {
+									value: "{machine_host}",
+									placeholder: "192.168.1.100 or server.local",
+									oninput: move |e| *machine_host.write() = e.value(),
+								}
+							}
+							div { class: "form-field",
+								label { "SSH User" }
+								input {
+									value: "{machine_user}",
+									placeholder: "root",
+									oninput: move |e| *machine_user.write() = e.value(),
+								}
+							}
+							div { class: "form-actions-row",
+								button {
+									class: "btn-ghost",
+									onclick: move |_| *add_panel.write() = AddPanelState::Closed,
+									"Cancel"
+								}
+								button {
+									class: "btn-primary",
+									disabled: machine_host().trim().is_empty(),
+									onclick: {
+									    let db = db.clone();
+									    move |_| {
+									        let name = machine_name().trim().to_string();
+									        let host = machine_host().trim().to_string();
+									        let user = machine_user().trim().to_string();
+									        let db = db.clone();
+									        let on_changed = on_changed;
+									        let mut add_panel = add_panel;
+									        spawn(async move {
+									            match add_remote_machine(&db, &name, &host, &user).await {
+									                Ok(()) => {
+									                    info!("remote machine added: {}", host);
+									                    on_changed.call(());
+									                }
+									                Err(e) => error!("add machine failed: {}", e),
+									            }
+									            *add_panel.write() = AddPanelState::Closed;
+									        });
+									    }
+									},
+									"Add"
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 // ─── Data loading ───────────────────────────────────────────
@@ -528,6 +680,9 @@ async fn load_nodes(
     let mut nodes = Vec::new();
     let mut node_index = 0usize;
 
+    // First, collect all nodes without assigning positions
+    let mut all_nodes_temp = Vec::new();
+
     for container in containers {
         let cid = rid_string(&container.id);
         
@@ -544,32 +699,8 @@ async fn load_nodes(
                 
                 let is_dir = true; // Root directories are always directories
                 let depth = 0; // Root level
-                
-                // Grid position in workspace
-                let col = node_index % GRID_COLS;
-                let row_num = node_index / GRID_COLS;
-                let (width, height) = if is_dir {
-                    (NODE_SIZE_DIR, NODE_SIZE_DIR)
-                } else {
-                    (NODE_WIDTH_FILE, NODE_HEIGHT_FILE)
-                };
 
-                nodes.push(NodeView {
-                    id: create_virtual_record_id(&format!("{}_root", cid)), // Create a virtual ID for the root
-                    container_id: cid.clone(),
-                    path: mount_point.clone(),
-                    label: short_path(mount_point),
-                    x: WORKSPACE_PADDING + (col as f64) * GRID_SPACING_X,
-                    y: WORKSPACE_PADDING + (row_num as f64) * GRID_SPACING_Y,
-                    width,
-                    height,
-                    depth,
-                    is_dir,
-                    is_expanded: false,
-                    is_orbit: false,
-                    child_count,
-                });
-                node_index += 1;
+                all_nodes_temp.push((container.id.clone(), cid.clone(), mount_point.clone(), child_count, depth, is_dir));
             }
         }
         
@@ -599,32 +730,58 @@ async fn load_nodes(
                 std::path::Path::new(&row.path).is_dir()
             };
 
-            // Grid position in workspace
-            let col = node_index % GRID_COLS;
-            let row_num = node_index / GRID_COLS;
-            let (width, height) = if is_dir {
-                (NODE_SIZE_DIR, NODE_SIZE_DIR)
-            } else {
-                (NODE_WIDTH_FILE, NODE_HEIGHT_FILE)
-            };
-
-            nodes.push(NodeView {
-                id: row.id.clone(),
-                container_id: cid.clone(),
-                path: row.path.clone(),
-                label: short_path(&row.path),
-                x: WORKSPACE_PADDING + (col as f64) * GRID_SPACING_X,
-                y: WORKSPACE_PADDING + (row_num as f64) * GRID_SPACING_Y,
-                width,
-                height,
-                depth,
-                is_dir,
-                is_expanded: false,
-                is_orbit: false,
-                child_count,
-            });
-            node_index += 1;
+            all_nodes_temp.push((row.id.clone(), cid.clone(), row.path.clone(), child_count, depth, is_dir));
         }
+    }
+
+    // Calculate total descendants for each node
+    let all_paths_owned: Vec<String> = all_nodes_temp.iter().map(|(_, _, path, _, _, _)| path.clone()).collect();
+    let all_paths: Vec<&str> = all_paths_owned.iter().map(|s| s.as_str()).collect();
+    let mut nodes_with_descendants = Vec::new();
+
+    for (id, container_id, path, child_count, depth, is_dir) in all_nodes_temp {
+        let total_descendants = if is_dir {
+            calculate_total_descendants(&path, &all_paths)
+        } else {
+            0 // Files have no descendants
+        };
+
+        // Calculate node size based on total descendants
+        let node_size = calculate_node_size(total_descendants, all_paths.len());
+        
+        nodes_with_descendants.push((
+            id, container_id, path, child_count, depth, is_dir, total_descendants, node_size
+        ));
+    }
+
+    // Now assign positions and create final NodeView objects
+    for (id, container_id, path, child_count, depth, is_dir, total_descendants, node_size) in nodes_with_descendants {
+        // Grid position in workspace
+        let col = node_index % GRID_COLS;
+        let row_num = node_index / GRID_COLS;
+        let (width, height) = if is_dir {
+            (node_size, node_size) // Use calculated size for directories
+        } else {
+            (NODE_WIDTH_FILE, NODE_HEIGHT_FILE)
+        };
+
+        nodes.push(NodeView {
+            id,
+            container_id,
+            path: path.clone(),
+            label: short_path(&path),
+            x: WORKSPACE_PADDING + (col as f64) * GRID_SPACING_X,
+            y: WORKSPACE_PADDING + (row_num as f64) * GRID_SPACING_Y,
+            width,
+            height,
+            depth,
+            is_dir,
+            is_expanded: false,
+            is_orbit: false,
+            child_count,
+            total_descendants,
+        });
+        node_index += 1;
     }
 
     Ok(nodes)
@@ -734,6 +891,37 @@ fn create_virtual_record_id(key: &str) -> RecordId {
         table: "virtual".into(),
         key: surrealdb::types::RecordIdKey::String(key.to_string()),
     }
+}
+
+fn calculate_total_descendants(parent_path: &str, all_paths: &[&str]) -> usize {
+    let mut count = 0;
+    for path in all_paths {
+        if path_contains(parent_path, path) {
+            count += 1;
+        }
+    }
+    count
+}
+
+fn calculate_node_size(total_descendants: usize, _total_workspace_nodes: usize) -> f64 {
+    // Use only the total_descendants for sizing, not the ratio to workspace
+    // This will make the size dependent on the content of the node itself
+    
+    // Apply logarithmic scaling to the descendant count directly
+    // Using log(1 + x) to scale the count, then transform to appropriate size range
+    let log_count = (1.0 + total_descendants as f64).ln();
+    
+    // Transform to pixel size: base size + contribution from log of descendants
+    let calculated_size = 40.0 + (log_count * 10.0); // Base 40px + contribution from log count
+    
+    // Clamp to reasonable min/max values
+    calculated_size.clamp(40.0, 120.0) // Minimum 40px (so text is readable), maximum 120px
+}
+
+fn get_visible_nodes(all_nodes: &[NodeView], _expansion_state: &HashMap<String, (bool, bool)>) -> Vec<NodeView> {
+    // For now, return all nodes - we'll implement proper filtering later
+    // In a full implementation, this would filter nodes based on expansion state
+    all_nodes.to_vec()
 }
 
 async fn add_remote_machine(db: &DbHandle, name: &str, hostname: &str, ssh_user: &str) -> Result<(), String> {

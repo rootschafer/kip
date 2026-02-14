@@ -60,7 +60,8 @@ pub fn WorkspaceNode(
     let cx = node.center_x();
     let cy = node.center_y();
     let label = node.label.clone();
-    let child_count = node.child_count.to_string();
+    let _child_count = node.child_count.to_string();  // Keeping for potential future use
+    let total_descendants = node.total_descendants;
 
     // Get expansion state for directories
     let (is_orbit, is_expanded) = if is_dir {
@@ -70,6 +71,15 @@ pub fn WorkspaceNode(
             .unwrap_or((false, false))
     } else {
         (false, false)
+    };
+
+    // Calculate size based on total descendants for directory nodes
+    let size_style = if is_dir {
+        let _base_size = 56.0; // Default size for directories
+        let size_factor = (1.0 + (total_descendants as f64).ln() * 5.0).min(120.0).max(30.0);
+        format!("width: {}px; height: {}px;", size_factor, size_factor)
+    } else {
+        format!("width: {}px; height: {}px;", node.width, node.height)
     };
 
     // Determine the class based on node type and expansion state
@@ -94,7 +104,7 @@ pub fn WorkspaceNode(
         div {
             key: "{node_id}",
             class: "{class}",
-            style: "left: {x}px; top: {y}px; --node-color: {color};",
+            style: "left: {x}px; top: {y}px; --node-color: {color}; {size_style}",
 
             onmousedown: {
                 let node_id = node_id.clone();
@@ -126,8 +136,22 @@ pub fn WorkspaceNode(
                 move |e: MouseEvent| {
                     e.stop_propagation();
                     let current = drag.read().clone();
-                    if let DragState::CreatingEdge { source_id, .. } = current {
-                        if source_id != node_id {
+                    if let DragState::CreatingEdge { source_id, source_x, source_y, mouse_x, mouse_y } = current {
+                        // Check if this was a click (small movement) vs drag
+                        let distance_moved = ((mouse_x - source_x).powi(2) + (mouse_y - source_y).powi(2)).sqrt();
+                        
+                        if distance_moved < 5.0 && source_id == node_id && is_dir {  // Was a click on the same node
+                            // This is an expansion click
+                            let mut state = expansion_state.write();
+                            let current = state.get(&node_id).copied().unwrap_or((false, false));
+                            let next = match current {
+                                (false, false) => (true, false),  // Enter orbit state
+                                (true, false) => (false, true),  // Enter expanded state
+                                (false, true) => (false, false), // Exit expanded state
+                                _ => (false, false),
+                            };
+                            state.insert(node_id.clone(), next);
+                        } else if source_id != node_id {  // Different node - create edge
                             info!("creating edge: {} -> {}", source_id, node_id);
                             let source = source_id;
                             let dest = node_id.clone();
@@ -145,22 +169,6 @@ pub fn WorkspaceNode(
                     *drag.write() = DragState::None;
                 }
             },
-            onclick: {
-                let node_id = node_id.clone();
-                move |e: MouseEvent| {
-                    if !is_dir || e.modifiers().shift() { return; }
-                    e.stop_propagation();
-                    let mut state = expansion_state.write();
-                    let current = state.get(&node_id).copied().unwrap_or((false, false));
-                    let next = match current {
-                        (false, false) => (true, false),  // Enter orbit state
-                        (true, false) => (false, true),  // Enter expanded state
-                        (false, true) => (false, false), // Exit expanded state
-                        _ => (false, false),
-                    };
-                    state.insert(node_id.clone(), next);
-                }
-            },
 
             // Content varies based on expansion state
             if is_expanded {
@@ -171,9 +179,13 @@ pub fn WorkspaceNode(
             } else {
                 // Normal view (collapsed or orbit)
                 if is_dir {
-                    span { class: "child-count", "{child_count}" }
+                    div { class: "node-info",
+                        span { class: "node-label", "{label}" }
+                        span { class: "total-descendants", "{total_descendants}" }
+                    }
+                } else {
+                    span { class: "node-label", "{label}" }
                 }
-                span { class: "node-label", "{label}" }
                 NodeHandle {}
             }
         }

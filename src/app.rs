@@ -20,22 +20,20 @@ pub fn DbErrorApp() -> Element {
     };
 
     rsx! {
-        document::Stylesheet { href: MAIN_CSS }
-        div { class: "app",
-            div { class: "header",
-                h1 { "Kip" }
-            }
-            div { class: "db-locked-banner",
-                "{msg}"
-            }
-        }
-    }
+		document::Stylesheet { href: MAIN_CSS }
+		div { class: "app",
+			div { class: "header",
+				h1 { "Kip" }
+			}
+			div { class: "db-locked-banner", "{msg}" }
+		}
+	}
 }
 
 #[component]
 pub fn App() -> Element {
     let db = use_context::<DbHandle>();
-    let _picker = use_context_provider(|| PickerManager::new());
+    let picker = use_store(|| PickerManager::new());
     let hostname = use_signal(|| String::from("..."));
     let mut refresh_tick = use_signal(|| 0u32);
 
@@ -83,17 +81,21 @@ pub fn App() -> Element {
     };
 
     rsx! {
-        document::Stylesheet { href: MAIN_CSS }
-        div { class: "app",
-            div { class: "header",
-                h1 { "Kip" }
-                div { class: "header-right",
-                    span { class: "host", "{hostname}" }
-                }
-            }
-            MappingGraph { refresh_tick: refresh_tick(), on_changed: on_refresh }
-            FilePickerLayer { on_location_added: on_refresh }
-            ReviewQueue { refresh_tick: refresh_tick(), on_resolved: on_refresh }
-        }
-    }
+		document::Stylesheet { href: MAIN_CSS }
+		div { class: "app",
+			// div { class: "header",
+			//     h1 { "Kip" }
+			//     div { class: "header-right",
+			//         span { class: "host", "{hostname}" }
+			//     }
+			// }
+			MappingGraph {
+				picker,
+				refresh_tick: refresh_tick(),
+				on_changed: on_refresh,
+			}
+			FilePickerLayer { picker, on_location_added: on_refresh }
+			ReviewQueue { refresh_tick: refresh_tick(), on_resolved: on_refresh }
+		}
+	}
 }
