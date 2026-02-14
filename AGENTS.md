@@ -133,3 +133,48 @@ Components live in `src/ui/container_components.rs` (being restructured):
 - Container color looked up via `color_map: HashMap<String, String>`
 - `is_dir` detected via filesystem metadata + child count heuristic
 - `child_count` computed from path containment between sibling locations
+
+---
+
+## CRITICAL: Design Documentation Reference
+
+**Every AI agent working on this codebase must read ALL files in `./notes/the_design/` before starting work.** This directory contains the authoritative development plan and architectural decisions.
+
+The design files in `./notes/the_design/` form a cohesive, interconnected plan that describes the current state and future direction of the project. These files should be kept up-to-date with the current development status. When implementing features, check these files first to understand the intended architecture and avoid conflicting implementations.
+
+If you complete a feature that was documented in these files, remove or update the implementation details to prevent future AI agents from duplicating work or breaking existing functionality with outdated instructions.
+
+The design documentation is organized by phases:
+- `COMPREHENSIVE_DEVELOPMENT_PLAN.md` - Overall roadmap with cross-phase references
+- `Phase1/` - Core functionality (directory expansion, grouping, layout engine)
+  - `Phase1.1_Directory_Expansion_Implementation.md` - Directory expansion implementation
+  - `Phase1.1_Directory_Expansion_and_File_Picker.md` - Combined directory expansion and file picker implementation
+  - `Phase1.2_Node_Grouping_Implementation.md` - Node grouping functionality
+  - `Phase1.3_Force_Directed_Layout_Implementation.md` - Force-directed layout engine
+- `Phase2/` - Transfer engine (core transfers, intent lifecycle, error handling)
+  - `Phase2.1_Core_Transfer_Engine.md` - Core file transfer functionality
+  - `Phase2.2_Intent_Lifecycle_Management.md` - Intent state management (moved from KIP_DESIGN_3_INTENT_LIFECYCLE.md)
+  - `Phase2.3_Error_Handling_and_Review_Queue.md` - Error handling and review queue (moved from KIP_DESIGN_5_ERROR_HANDLING.md)
+- `Phase3/` - Advanced features (visualization, remote access, performance)
+  - `Phase3.1_Advanced_Visualization.md` - Advanced visualization features
+  - `Phase3.2_Remote_Access_and_Security.md` - Remote access and security
+  - `Phase3.3_Performance_Optimization.md` - Performance optimization
+- `Phase4/` - Production readiness (testing, deployment, documentation)
+  - `Phase4.1_Testing_and_Quality_Assurance.md` - Testing and QA
+  - `Phase4.2_Deployment_and_Distribution.md` - Deployment and distribution
+  - `Phase4.3_Documentation_and_Support.md` - Documentation and support
+
+Foundational design documents (remain in main directory):
+- `KIP_DESIGN_1.md` - High-level vision and architecture
+- `KIP_DESIGN_2_DATA_MODEL.md` - Data model and database schema
+- `KIP_DESIGN_4_ARCHITECTURE.md` - System architecture
+- `KIP_DESIGN_6_MVP.md` - MVP feature set
+- `KIP_DESIGN_7_MAPPING_GRAPH.md` - Mapping graph UI design
+
+Critical Current Issues to Address:
+- **SVG Coordinate System Alignment**: Mouse coordinates don't align with SVG overlay coordinates, causing cursor offset in edge creation - See `CRITICAL_ISSUES.md` for details
+- **Click vs Drag Detection**: Current implementation interferes with edge creation when trying to expand nodes - See `CRITICAL_ISSUES.md` for details
+- **Orbit View Implementation**: Children not properly fanned out around parent nodes in orbit state - See `CRITICAL_ISSUES.md` for details
+- **Enter View Implementation**: Workspace not properly filtered to show only direct children of entered directory - See `CRITICAL_ISSUES.md` for details
+
+Always maintain consistency between the design documentation and the actual implementation.
