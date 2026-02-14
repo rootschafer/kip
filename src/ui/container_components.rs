@@ -118,7 +118,7 @@ pub fn WorkspaceNode(
                             sel.insert(node_id.clone());
                         }
                         *drag.write() = DragState::None;
-                    } else {
+                    } else if e.modifiers().ctrl() || e.modifiers().alt() {  // Use Ctrl+click or Alt+click for edge creation
                         let coords = e.page_coordinates();
                         *drag.write() = DragState::CreatingEdge {
                             source_id: node_id.clone(),
@@ -127,7 +127,68 @@ pub fn WorkspaceNode(
                             mouse_x: coords.x,
                             mouse_y: coords.y,
                         };
+                    } else {  // Left-click: Start expansion sequence (orbit view)
+                        // Don't start edge creation on left-click anymore
+                        // Expansion will be handled on mouseup if it's a click (small movement)
+                        let coords = e.page_coordinates();
+                        *drag.write() = DragState::LeftClickPending {
+                            node_id: node_id.clone(),
+                            start_x: coords.x,
+                            start_y: coords.y,
+                            mouse_x: coords.x,
+                            mouse_y: coords.y,
+                        };
                     }
+                }
+            },
+            onmousemove: move |e: MouseEvent| {
+                let current_drag = drag.read().clone();
+                let coords = e.page_coordinates();
+                match current_drag {
+                    DragState::LeftClickPending { node_id, start_x, start_y, .. } => {
+                        // Update mouse position for potential drag
+                        let distance_moved = ((coords.x - start_x).powi(2) + (coords.y - start_y).powi(2)).sqrt();
+                        if distance_moved > 5.0 {
+                            // Convert to drag state if moved significantly
+                            *drag.write() = DragState::LeftDragging {
+                                node_id,
+                                start_x,
+                                start_y,
+                                mouse_x: coords.x,
+                                mouse_y: coords.y,
+                            };
+                        } else {
+                            // Still pending click
+                            *drag.write() = DragState::LeftClickPending {
+                                node_id,
+                                start_x,
+                                start_y,
+                                mouse_x: coords.x,
+                                mouse_y: coords.y,
+                            };
+                        }
+                    }
+                    DragState::LeftDragging { node_id, start_x, start_y, .. } => {
+                        // Update drag position
+                        *drag.write() = DragState::LeftDragging {
+                            node_id,
+                            start_x,
+                            start_y,
+                            mouse_x: coords.x,
+                            mouse_y: coords.y,
+                        };
+                    }
+                    DragState::CreatingEdge { source_id, source_x, source_y, .. } => {
+                        // Update edge creation drag
+                        *drag.write() = DragState::CreatingEdge {
+                            source_id,
+                            source_x,
+                            source_y,
+                            mouse_x: coords.x,
+                            mouse_y: coords.y,
+                        };
+                    }
+                    _ => {}
                 }
             },
             onmouseup: {
@@ -136,51 +197,72 @@ pub fn WorkspaceNode(
                 move |e: MouseEvent| {
                     e.stop_propagation();
                     let current = drag.read().clone();
-                    if let DragState::CreatingEdge { source_id, source_x, source_y, mouse_x, mouse_y } = current {
-                        // Check if this was a click (small movement) vs drag
-                        let distance_moved = ((mouse_x - source_x).powi(2) + (mouse_y - source_y).powi(2)).sqrt();
-
-                        if distance_moved < 5.0 && source_id == node_id && is_dir {  // Was a click on the same node
-                            // This is an expansion click - toggle expansion state
-                            let mut state = expansion_state.write();
-                            let current = state.get(&node_id).copied().unwrap_or((false, false));
-                            let next = match current {
-                                (false, false) => (true, false),  // Enter orbit state (single click)
-                                (true, false) => (false, true),  // Enter expanded state (double click effect)
-                                (false, true) => (false, false), // Exit expanded state
-                                _ => (false, false),
-                            };
-                            state.insert(node_id.clone(), next);
-                        } else if source_id != node_id {  // Different node - create edge
-                            info!("creating edge: {} -> {}", source_id, node_id);
-                            let source = source_id;
-                            let dest = node_id.clone();
-                            let db = db.clone();
-                            let on_changed = on_changed;
-                            spawn(async move {
-                                match create_edge(&db, &source, &dest).await {
-                                    Ok(()) => info!("edge created"),
-                                    Err(e) => error!("edge creation failed: {}", e),
+                    match current {
+                        DragState::LeftClickPending { node_id: click_node_id, start_x, start_y, mouse_x, mouse_y } => {
+                            // This was a left-click that didn't move much - handle as expansion
+                            if click_node_id == node_id && is_dir {
+                                let distance_moved = ((mouse_x - start_x).powi(2) + (mouse_y - start_y).powi(2)).sqrt();
+                                if distance_moved < 5.0 {
+                                    // Toggle expansion state on left-click
+                                    let mut state = expansion_state.write();
+                                    let current = state.get(&node_id).copied().unwrap_or((false, false));
+                                    let next = match current {
+                                        (false, false) => (true, false),  // Enter orbit state (single click)
+                                        (true, false) => (false, true),  // Enter expanded state
+                                        (false, true) => (false, false), // Exit expanded state
+                                        _ => (false, false),
+                                    };
+                                    state.insert(node_id.clone(), next);
                                 }
-                                on_changed.call(());
-                            });
+                            }
+                            *drag.write() = DragState::None;
+                        }
+                        DragState::LeftDragging { node_id: drag_node_id, start_x, start_y, mouse_x, mouse_y } => {
+                            // This was a left-drag - treat as regular drag
+                            if drag_node_id != node_id {
+                                // Create edge if dropped on different node
+                                info!("creating edge: {} -> {}", drag_node_id, node_id);
+                                let source = drag_node_id;
+                                let dest = node_id.clone();
+                                let db = db.clone();
+                                let on_changed = on_changed;
+                                spawn(async move {
+                                    match create_edge(&db, &source, &dest).await {
+                                        Ok(()) => info!("edge created"),
+                                        Err(e) => error!("edge creation failed: {}", e),
+                                    }
+                                    on_changed.call(());
+                                });
+                            }
+                            *drag.write() = DragState::None;
+                        }
+                        DragState::CreatingEdge { source_id, source_x, source_y, mouse_x, mouse_y } => {
+                            // Right-click drag for edge creation
+                            if source_id != node_id {
+                                info!("creating edge: {} -> {}", source_id, node_id);
+                                let source = source_id;
+                                let dest = node_id.clone();
+                                let db = db.clone();
+                                let on_changed = on_changed;
+                                spawn(async move {
+                                    match create_edge(&db, &source, &dest).await {
+                                        Ok(()) => info!("edge created"),
+                                        Err(e) => error!("edge creation failed: {}", e),
+                                    }
+                                    on_changed.call(());
+                                });
+                            }
+                            *drag.write() = DragState::None;
+                        }
+                        _ => {
+                            *drag.write() = DragState::None;
                         }
                     }
-                    *drag.write() = DragState::None;
                 }
             },
-            ondoubleclick: {
-                let node_id = node_id.clone();
-                move |e: MouseEvent| {
-                    e.stop_propagation();
-                    if !is_dir { return; } // Only for directories
-                    
-                    // Handle double-click to enter directory
-                    let mut state = expansion_state.write();
-                    // For double-click, we want to go directly to the "entered" view of this directory
-                    // This means we set it to (false, true) - not in orbit, but expanded (entered)
-                    state.insert(node_id.clone(), (false, true));
-                }
+            oncontextmenu: move |e: Event<MouseData>| {
+                e.prevent_default(); // Prevent default context menu
+                // Right-click is now for edge creation, so we don't need special handling here
             },
 
             // Content varies based on expansion state

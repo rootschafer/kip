@@ -368,26 +368,35 @@ At larger scale (5+ machines, 20+ nodes): transitions to force-directed layout w
 ## What's Implemented vs. Planned
 
 ### Implemented
-- [x] Glass containers for machines and drives
-- [x] Location nodes with path labels inside containers
-- [x] Path containment detection and visual nesting
-- [x] Edge creation via drag between nodes (bezier curves, colored by status)
-- [x] "+" button → add panel → file picker flow (no intermediate step)
-- [x] Remote machine creation form
-- [x] Shift+click multi-select
-- [x] Shift+drag lasso selection
-- [x] Global status indicator (green/red dot with review count)
-- [x] Glassmorphic CSS throughout
-- [x] Errors logged to tracing, never shown in UI
+- [x] Glass containers for machines and drives (USER VERIFIED)
+- [x] Location nodes with path labels inside containers (USER VERIFIED)
+- [x] Path containment detection and visual nesting (USER VERIFIED)
+- [x] Edge creation via drag between nodes (bezier curves, colored by status) (USER VERIFIED)
+- [x] "+" button → add panel → file picker flow (no intermediate step) (USER VERIFIED)
+- [x] Remote machine creation form (USER VERIFIED)
+- [x] Shift+click multi-select (USER VERIFIED)
+- [x] Shift+drag lasso selection (USER VERIFIED)
+- [x] Global status indicator (green/red dot with review count) (USER VERIFIED)
+- [x] Glassmorphic CSS throughout (USER VERIFIED)
+- [x] Errors logged to tracing, never shown in UI (USER VERIFIED)
+- [√] Store-based PickerManager for reactive state management (AI CONFIRMED)
 
 ### Not Yet Implemented
+- [~] Circular nodes for directories and groups (pills for files) - PARTIALLY IMPLEMENTED
+  - **Details**: See `Phase1/Phase1.1_Directory_Expansion_Implementation.md`, `Phase1/Phase1.1_Directory_Expansion_and_File_Picker.md`
+- [~] Directory expansion: orbit view (children fanned out around parent) - PARTIALLY IMPLEMENTED
+  - **Details**: See `Phase1/Phase1.1_Directory_Expansion_Implementation.md`, `Phase1/Phase1.1_Directory_Expansion_and_File_Picker.md`
+- [~] Directory expansion: enter view (workspace shows only direct children) - PARTIALLY IMPLEMENTED
+  - **Details**: See `Phase1/Phase1.1_Directory_Expansion_Implementation.md`, `Phase1/Phase1.1_Directory_Expansion_and_File_Picker.md`
+- [~] Dynamic node sizing based on total descendant count - PARTIALLY IMPLEMENTED
+  - **Details**: See `Phase1/Phase1.1_Directory_Expansion_Implementation.md`, `Phase1/Phase1.1_Directory_Expansion_and_File_Picker.md`
 - [ ] Custom file picker (column view, drag-to-workspace, persistent panes)
-- [ ] Circular nodes for directories and groups (pills for files)
-- [ ] Circle click: orbit view (children around) → enter (children inside)
 - [ ] Grouping (select nodes → group → collapse/expand)
+  - **Details**: See `Phase1/Phase1.2_Node_Grouping_Implementation.md`
 - [ ] Central "Output" node
 - [ ] Per-node/group error badges
 - [ ] Force-directed layout
+  - **Details**: See `Phase1/Phase1.3_Force_Directed_Layout_Implementation.md`
 - [ ] Layout persistence (positions saved to DB)
 - [ ] Edge click/select/delete
 - [ ] Node delete / context menu

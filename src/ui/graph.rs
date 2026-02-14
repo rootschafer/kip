@@ -67,12 +67,16 @@ pub fn GraphToolbar(
     review_count: i64,
     on_add_machine_click: EventHandler,
     on_container_click: EventHandler<ContainerView>,
-    current_view: ReadSignal<Option<String>>,  // Track currently "entered" directory
+    expansion_state: ReadOnlySignal<HashMap<String, (bool, bool)>>,  // Track expansion states
     on_navigate_back: EventHandler,  // Handler to go back to parent view
 ) -> Element {
     let status_class = if review_count > 0 { "status-indicator error" } else { "status-indicator ok" };
     let status_count = review_count;
-    let has_current_view = current_view().is_some();
+    
+    // Check if we're currently in an "entered" view (expanded=true, orbit=false)
+    let in_entered_view = expansion_state()
+        .iter()
+        .any(|(_, &(is_orbit, is_expanded))| !is_orbit && is_expanded);
 
     rsx! {
 		div { class: "graph-toolbar",
@@ -89,8 +93,8 @@ pub fn GraphToolbar(
 				}
 			}
 			
-			// Back button when in a directory view
-			if has_current_view {
+			// Back button when in an entered view
+			if in_entered_view {
 				button {
 					class: "btn-back",
 					title: "Navigate up to parent directory",
@@ -155,6 +159,20 @@ pub(crate) enum DragState {
         current_x: f64,
         current_y: f64,
     },
+    LeftClickPending {
+        node_id: String,
+        start_x: f64,
+        start_y: f64,
+        mouse_x: f64,
+        mouse_y: f64,
+    },
+    LeftDragging {
+        node_id: String,
+        start_x: f64,
+        start_y: f64,
+        mouse_x: f64,
+        mouse_y: f64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -173,7 +191,6 @@ pub fn MappingGraph(picker: Store<PickerManager>, refresh_tick: u32, on_changed:
     let mut drag = use_signal(|| DragState::None);
     let mut selected = use_signal(|| HashSet::<String>::new());
     let mut expansion_state = use_signal(|| HashMap::<String, (bool, bool)>::new());
-    let current_view = use_signal(|| None::<String>); // Track currently "entered" directory
     let mut add_panel = use_signal(|| AddPanelState::Closed);
 
     // Add-machine form fields
@@ -217,6 +234,10 @@ pub fn MappingGraph(picker: Store<PickerManager>, refresh_tick: u32, on_changed:
 
     let canvas_width = 1200.0_f64;
     let canvas_height = 800.0_f64;
+
+    // Calculate offset from window coordinates to SVG coordinates
+    // This accounts for the toolbar and header height
+    let coordinate_offset = use_signal(|| (0.0, 0.0)); // (x, y) offset - would be calculated based on actual element position
 
     let _node_positions: Vec<(String, f64, f64)> = {
         let mut positions = Vec::new();
@@ -390,7 +411,7 @@ pub fn MappingGraph(picker: Store<PickerManager>, refresh_tick: u32, on_changed:
 				    // picker().open(cid, name, std::path::PathBuf::from(root));
 				    picker.open(cid, name, std::path::PathBuf::from(root));
 				},
-				current_view: current_view,
+				expansion_state: expansion_state,
 				on_navigate_back: move |_| {
 				    // Reset expansion state to exit the current "entered" view
 				    // Find the currently expanded directory and reset its state
@@ -952,10 +973,10 @@ fn calculate_node_size(total_descendants: usize, _total_workspace_nodes: usize) 
     let log_count = (1.0 + total_descendants as f64).ln();
     
     // Transform to pixel size: base size + contribution from log of descendants
-    let calculated_size = 40.0 + (log_count * 10.0); // Base 40px + contribution from log count
+    let calculated_size = 80.0 + (log_count * 15.0); // Base 80px (larger) + contribution from log count
     
     // Clamp to reasonable min/max values
-    calculated_size.clamp(40.0, 120.0) // Minimum 40px (so text is readable), maximum 120px
+    calculated_size.clamp(60.0, 150.0) // Larger minimum 60px (so text is readable), maximum 150px
 }
 
 
@@ -981,10 +1002,23 @@ fn get_visible_nodes(all_nodes: &[NodeView], expansion_state: &HashMap<String, (
                     }
 
                     // Is it a direct child? (only one level deeper)
-                    let entered_parts: Vec<&str> = entered_path.split('/').filter(|s| !s.is_empty()).collect();
-                    let current_parts: Vec<&str> = current_path.split('/').filter(|s| !s.is_empty()).collect();
-
-                    current_parts.len() == entered_parts.len() + 1
+                    // Normalize paths to handle various separator formats
+                    let entered_clean = entered_path.trim_end_matches('/');
+                    let current_clean = current_path.trim_end_matches('/');
+                    
+                    // Check if current path is directly under entered path
+                    if !current_clean.starts_with(&entered_clean) || current_clean == entered_clean {
+                        return false;
+                    }
+                    
+                    // Find the next path segment after the entered path
+                    let remaining_path = &current_clean[entered_clean.len()..];
+                    let remaining_trimmed = remaining_path.trim_start_matches('/');
+                    
+                    // Check if there's only one more segment (direct child)
+                    let remaining_parts: Vec<&str> = remaining_trimmed.split('/').filter(|s| !s.is_empty()).collect();
+                    
+                    remaining_parts.len() == 1
                 } else {
                     // If we can't find the entered node, show no nodes (empty view)
                     false
@@ -993,9 +1027,25 @@ fn get_visible_nodes(all_nodes: &[NodeView], expansion_state: &HashMap<String, (
             .cloned()
             .collect()
     } else {
-        // If not in an entered view, show all nodes
-        // (In a more complex implementation, we might hide nodes inside expanded directories)
-        all_nodes.to_vec()
+        // If not in an entered view, show all nodes that are not inside expanded directories
+        all_nodes.iter()
+            .filter(|node| {
+                // Check if this node is inside any directory that is currently expanded (but not in orbit)
+                for parent_node in all_nodes.iter() {
+                    if parent_node.is_dir && !parent_node.is_orbit && parent_node.is_expanded {
+                        // If the current node is inside this expanded parent (but not the same node)
+                        if node.path.starts_with(&parent_node.path) 
+                            && node.path != parent_node.path {
+                            // This node should be hidden because its parent is expanded
+                            return false;
+                        }
+                    }
+                }
+                // Show this node if it's not inside an expanded parent
+                true
+            })
+            .cloned()
+            .collect()
     }
 }
 
