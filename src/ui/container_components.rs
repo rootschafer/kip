@@ -139,14 +139,14 @@ pub fn WorkspaceNode(
                     if let DragState::CreatingEdge { source_id, source_x, source_y, mouse_x, mouse_y } = current {
                         // Check if this was a click (small movement) vs drag
                         let distance_moved = ((mouse_x - source_x).powi(2) + (mouse_y - source_y).powi(2)).sqrt();
-                        
+
                         if distance_moved < 5.0 && source_id == node_id && is_dir {  // Was a click on the same node
-                            // This is an expansion click
+                            // This is an expansion click - toggle expansion state
                             let mut state = expansion_state.write();
                             let current = state.get(&node_id).copied().unwrap_or((false, false));
                             let next = match current {
-                                (false, false) => (true, false),  // Enter orbit state
-                                (true, false) => (false, true),  // Enter expanded state
+                                (false, false) => (true, false),  // Enter orbit state (single click)
+                                (true, false) => (false, true),  // Enter expanded state (double click effect)
                                 (false, true) => (false, false), // Exit expanded state
                                 _ => (false, false),
                             };
@@ -167,6 +167,19 @@ pub fn WorkspaceNode(
                         }
                     }
                     *drag.write() = DragState::None;
+                }
+            },
+            ondoubleclick: {
+                let node_id = node_id.clone();
+                move |e: MouseEvent| {
+                    e.stop_propagation();
+                    if !is_dir { return; } // Only for directories
+                    
+                    // Handle double-click to enter directory
+                    let mut state = expansion_state.write();
+                    // For double-click, we want to go directly to the "entered" view of this directory
+                    // This means we set it to (false, true) - not in orbit, but expanded (entered)
+                    state.insert(node_id.clone(), (false, true));
                 }
             },
 

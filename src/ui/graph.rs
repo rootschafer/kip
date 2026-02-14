@@ -67,9 +67,12 @@ pub fn GraphToolbar(
     review_count: i64,
     on_add_machine_click: EventHandler,
     on_container_click: EventHandler<ContainerView>,
+    current_view: ReadSignal<Option<String>>,  // Track currently "entered" directory
+    on_navigate_back: EventHandler,  // Handler to go back to parent view
 ) -> Element {
     let status_class = if review_count > 0 { "status-indicator error" } else { "status-indicator ok" };
     let status_count = review_count;
+    let has_current_view = current_view().is_some();
 
     rsx! {
 		div { class: "graph-toolbar",
@@ -85,6 +88,19 @@ pub fn GraphToolbar(
 					}
 				}
 			}
+			
+			// Back button when in a directory view
+			if has_current_view {
+				button {
+					class: "btn-back",
+					title: "Navigate up to parent directory",
+					onclick: move |_| {
+					    on_navigate_back.call(());
+					},
+					"\u{2190}" // Left arrow
+				}
+			}
+			
 			div { class: "machine-chips",
 				for container in containers.iter() {
 					MachineChip {
@@ -157,6 +173,7 @@ pub fn MappingGraph(picker: Store<PickerManager>, refresh_tick: u32, on_changed:
     let mut drag = use_signal(|| DragState::None);
     let mut selected = use_signal(|| HashSet::<String>::new());
     let mut expansion_state = use_signal(|| HashMap::<String, (bool, bool)>::new());
+    let current_view = use_signal(|| None::<String>); // Track currently "entered" directory
     let mut add_panel = use_signal(|| AddPanelState::Closed);
 
     // Add-machine form fields
@@ -195,13 +212,96 @@ pub fn MappingGraph(picker: Store<PickerManager>, refresh_tick: u32, on_changed:
         .map(|c| (rid_string(&c.id), c.color.clone()))
         .collect();
 
-    // Filter nodes based on expansion state (for enter view)
+    // Get visible nodes based on expansion state (no memo needed since expansion_state is a signal)
     let visible_nodes = get_visible_nodes(&nodes, &expansion_state());
 
     let canvas_width = 1200.0_f64;
     let canvas_height = 800.0_f64;
 
-    let node_positions: Vec<(String, f64, f64)> = visible_nodes
+    let _node_positions: Vec<(String, f64, f64)> = {
+        let mut positions = Vec::new();
+        
+        for node in &visible_nodes {
+            let node_id = rid_string(&node.id);
+            
+            // Check if this node is in orbit state
+            let (is_orbit, _) = expansion_state()
+                .get(&node_id)
+                .copied()
+                .unwrap_or((false, false));
+                
+            if is_orbit {
+                // For nodes in orbit state, use their current position
+                positions.push((node_id.clone(), node.center_x(), node.center_y()));
+            } else {
+                // For regular nodes, use their current position
+                positions.push((node_id.clone(), node.center_x(), node.center_y()));
+            }
+        }
+        
+        positions
+    };
+    
+    // Update positions for nodes in orbit state
+    let adjusted_nodes: Vec<NodeView> = {
+        let mut adjusted = visible_nodes.clone();
+        
+        // Collect all the position changes first to avoid multiple mutable borrows
+        let mut position_changes = Vec::new();
+        
+        for node in &adjusted {
+            let node_id = rid_string(&node.id);
+            let (is_orbit, _) = expansion_state()
+                .get(&node_id)
+                .copied()
+                .unwrap_or((false, false));
+                
+            if is_orbit {
+                // Find direct children of this orbit node to calculate their positions
+                let parent_path = &node.path;
+                let children: Vec<&NodeView> = visible_nodes
+                    .iter()
+                    .filter(|child| {
+                        // Check if child is directly under parent
+                        if child.path.starts_with(parent_path) && child.path != *parent_path {
+                            let parent_parts: Vec<&str> = parent_path.split('/').filter(|s| !s.is_empty()).collect();
+                            let child_parts: Vec<&str> = child.path.split('/').filter(|s| !s.is_empty()).collect();
+                            child_parts.len() == parent_parts.len() + 1
+                        } else {
+                            false
+                        }
+                    })
+                    .collect();
+                
+                // Calculate orbit positions for children
+                let child_positions = calculate_orbit_positions(
+                    node.center_x(),
+                    node.center_y(),
+                    &children,
+                    80.0, // orbit radius
+                );
+
+                // Store the position changes to apply later
+                for (child_id, x, y) in child_positions {
+                    position_changes.push((child_id, x, y));
+                }
+            }
+        }
+        
+        // Apply all position changes
+        for (child_id, x, y) in position_changes {
+            if let Some(child_node) = adjusted.iter_mut().find(|n| rid_string(&n.id) == child_id) {
+                // Adjust the x,y to be the top-left position (not center)
+                child_node.x = x - child_node.width / 2.0;
+                child_node.y = y - child_node.height / 2.0;
+            }
+        }
+        
+        adjusted
+    };
+    
+    // Use adjusted node positions for the position vector
+    let node_positions: Vec<(String, f64, f64)> = adjusted_nodes
         .iter()
         .map(|n| (rid_string(&n.id), n.center_x(), n.center_y()))
         .collect();
@@ -271,8 +371,8 @@ pub fn MappingGraph(picker: Store<PickerManager>, refresh_tick: u32, on_changed:
 			// 	}
 			// }
 			GraphToolbar {
-				containers: containers.into(),
-				review_count: review_count.into(),
+				containers: containers.clone(),
+				review_count,
 				on_add_machine_click: move |_| {
 				    *machine_name.write() = String::new();
 				    *machine_host.write() = String::new();
@@ -290,6 +390,19 @@ pub fn MappingGraph(picker: Store<PickerManager>, refresh_tick: u32, on_changed:
 				    // picker().open(cid, name, std::path::PathBuf::from(root));
 				    picker.open(cid, name, std::path::PathBuf::from(root));
 				},
+				current_view: current_view,
+				on_navigate_back: move |_| {
+				    // Reset expansion state to exit the current "entered" view
+				    // Find the currently expanded directory and reset its state
+				    let mut exp_state = expansion_state.write();
+				    for (_id, (is_orbit, is_expanded)) in exp_state.iter_mut() {
+				        if !*is_orbit && *is_expanded {
+				            // This is the currently "entered" directory, reset it to collapsed
+				            *is_expanded = false;
+				            break;
+				        }
+				    }
+				}
 			}
 
 			// ─── Workspace: free nodes + SVG edges ───
@@ -430,7 +543,7 @@ pub fn MappingGraph(picker: Store<PickerManager>, refresh_tick: u32, on_changed:
 				}
 
 				// Free nodes in workspace
-				for node in visible_nodes.iter() {
+				for node in adjusted_nodes.iter() {
 					{
 					    let color = color_map.get(&node.container_id).cloned().unwrap_or_default();
 					    rsx! {
@@ -670,20 +783,21 @@ async fn load_nodes(
     }
 
     // Calculate total descendants for each node
-    let all_paths_owned: Vec<String> = all_nodes_temp.iter().map(|(_, _, path, _, _, _)| path.clone()).collect();
-    let all_paths: Vec<&str> = all_paths_owned.iter().map(|s| s.as_str()).collect();
     let mut nodes_with_descendants = Vec::new();
 
     for (id, container_id, path, child_count, depth, is_dir) in all_nodes_temp {
+        // For now, use the child_count as the descendant count
+        // Actual filesystem counting is too expensive to do synchronously
+        // We'll implement this asynchronously later
         let total_descendants = if is_dir {
-            calculate_total_descendants(&path, &all_paths)
+            child_count  // Use direct child count for now
         } else {
             0 // Files have no descendants
         };
 
         // Calculate node size based on total descendants
-        let node_size = calculate_node_size(total_descendants, all_paths.len());
-        
+        let node_size = calculate_node_size(total_descendants, 0); // Use 0 as total_workspace_nodes since we're using absolute counts
+
         nodes_with_descendants.push((
             id, container_id, path, child_count, depth, is_dir, total_descendants, node_size
         ));
@@ -828,15 +942,6 @@ fn create_virtual_record_id(key: &str) -> RecordId {
     }
 }
 
-fn calculate_total_descendants(parent_path: &str, all_paths: &[&str]) -> usize {
-    let mut count = 0;
-    for path in all_paths {
-        if path_contains(parent_path, path) {
-            count += 1;
-        }
-    }
-    count
-}
 
 fn calculate_node_size(total_descendants: usize, _total_workspace_nodes: usize) -> f64 {
     // Use only the total_descendants for sizing, not the ratio to workspace
@@ -853,10 +958,72 @@ fn calculate_node_size(total_descendants: usize, _total_workspace_nodes: usize) 
     calculated_size.clamp(40.0, 120.0) // Minimum 40px (so text is readable), maximum 120px
 }
 
-fn get_visible_nodes(all_nodes: &[NodeView], _expansion_state: &HashMap<String, (bool, bool)>) -> Vec<NodeView> {
-    // For now, return all nodes - we'll implement proper filtering later
-    // In a full implementation, this would filter nodes based on expansion state
-    all_nodes.to_vec()
+
+fn get_visible_nodes(all_nodes: &[NodeView], expansion_state: &HashMap<String, (bool, bool)>) -> Vec<NodeView> {
+    // Find the currently "entered" directory (expanded state = true, orbit = false)
+    let entered_dir = expansion_state.iter()
+        .find(|(_, &(is_orbit, is_expanded))| !is_orbit && is_expanded)
+        .map(|(id, _)| id.clone());
+
+    if let Some(entered_dir_id) = entered_dir {
+        // If we're in an "entered" view, only show direct children of the entered directory
+        all_nodes.iter()
+            .filter(|node| {
+                // Find the entered directory node
+                if let Some(entered_node) = all_nodes.iter().find(|n| rid_string(&n.id) == entered_dir_id) {
+                    // Check if current node is a direct child of the entered node
+                    let entered_path = &entered_node.path;
+                    let current_path = &node.path;
+
+                    // Is current path under entered path?
+                    if !current_path.starts_with(entered_path) || current_path == entered_path {
+                        return false;
+                    }
+
+                    // Is it a direct child? (only one level deeper)
+                    let entered_parts: Vec<&str> = entered_path.split('/').filter(|s| !s.is_empty()).collect();
+                    let current_parts: Vec<&str> = current_path.split('/').filter(|s| !s.is_empty()).collect();
+
+                    current_parts.len() == entered_parts.len() + 1
+                } else {
+                    // If we can't find the entered node, show no nodes (empty view)
+                    false
+                }
+            })
+            .cloned()
+            .collect()
+    } else {
+        // If not in an entered view, show all nodes
+        // (In a more complex implementation, we might hide nodes inside expanded directories)
+        all_nodes.to_vec()
+    }
+}
+
+// ─── Orbit positioning ────────────────────────────────────────────
+
+/// Calculate positions for child nodes in orbit around a parent node
+fn calculate_orbit_positions(
+    parent_x: f64,
+    parent_y: f64,
+    children: &[&NodeView],
+    radius: f64,
+) -> Vec<(String, f64, f64)> {
+    if children.is_empty() {
+        return Vec::new();
+    }
+    
+    let angle_increment = 2.0 * std::f64::consts::PI / children.len() as f64;
+    
+    children
+        .iter()
+        .enumerate()
+        .map(|(i, child)| {
+            let angle = i as f64 * angle_increment;
+            let x = parent_x + radius * angle.cos();
+            let y = parent_y + radius * angle.sin();
+            (rid_string(&child.id), x, y)
+        })
+        .collect()
 }
 
 async fn add_remote_machine(db: &DbHandle, name: &str, hostname: &str, ssh_user: &str) -> Result<(), String> {
