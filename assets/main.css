@@ -109,7 +109,7 @@ body {
     flex-direction: column;
 }
 
-/* ─── Graph toolbar (status + add button) ─── */
+/* ─── Graph toolbar (status + machine chips + add button) ─── */
 .graph-toolbar {
     display: flex;
     align-items: center;
@@ -118,6 +118,55 @@ body {
     flex-shrink: 0;
     z-index: 20;
     position: relative;
+}
+
+.machine-chips {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.machine-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+}
+.machine-chip:hover {
+    background: var(--glass-hover);
+    transform: translateY(-1px);
+}
+.machine-chip:active {
+    transform: translateY(0);
+}
+.machine-chip.disconnected {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.chip-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.chip-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+}
+.chip-kind {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .status-indicator {
@@ -150,28 +199,29 @@ body {
     color: var(--text-dim);
 }
 
-/* ─── Graph canvas (HTML containers + SVG overlay) ─── */
-.graph-wrapper {
+/* ─── Workspace (free nodes + SVG overlay) ─── */
+.workspace {
     flex: 1;
-    overflow: auto;
     position: relative;
+    overflow: hidden;
+    min-height: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(45deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                var(--bg);
+    background-size: 20px 20px;
 }
 
-.graph-html-layer {
-    position: relative;
-    min-height: 100%;
-    padding: 24px;
-}
-
-.graph-svg-overlay {
+.workspace-svg {
     position: absolute;
     top: 0;
     left: 0;
     pointer-events: none;
     z-index: 10;
+    width: 100%;
+    height: 100%;
 }
-.graph-svg-overlay path,
-.graph-svg-overlay line {
+.workspace-svg path,
+.workspace-svg line {
     pointer-events: stroke;
 }
 
@@ -230,27 +280,38 @@ body {
     gap: 4px;
 }
 
-/* ─── Nodes (location pills) ─── */
-.graph-node {
+/* ─── Workspace nodes (free-floating) ─── */
+.ws-node {
+    position: absolute;
+    cursor: grab;
+    transition: all 0.15s ease;
+    user-select: none;
+    --node-color: #ffffff; /* Default fallback color */
+}
+.ws-node:hover {
+    transform: scale(1.05);
+    z-index: 5;
+}
+.ws-node:active {
+    cursor: grabbing;
+}
+
+/* ─── File nodes (pills) ─── */
+.ws-file {
     display: flex;
     align-items: center;
     padding: 8px 10px;
     background: var(--glass-strong);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-sm);
-    cursor: grab;
-    transition: all 0.15s ease;
-    position: relative;
-    user-select: none;
+    min-width: 120px;
+    max-width: 200px;
 }
-.graph-node:hover {
+.ws-file:hover {
     background: var(--glass-hover);
     border-color: rgba(255, 255, 255, 0.12);
 }
-.graph-node:active {
-    cursor: grabbing;
-}
-.graph-node .node-label {
+.ws-file .node-label {
     font-size: 12px;
     font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
     color: var(--text);
@@ -258,7 +319,7 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.graph-node .node-handle {
+.ws-file .node-handle {
     position: absolute;
     right: -4px;
     top: 50%;
@@ -271,21 +332,89 @@ body {
     transition: all 0.15s ease;
     z-index: 2;
 }
-.graph-node:hover .node-handle {
+.ws-file:hover .node-handle {
+    background: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* ─── Directory nodes (circles) ─── */
+.ws-dir {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+.ws-dir:hover {
+    background: var(--glass-hover);
+    border-color: var(--node-color);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+.ws-dir .child-count {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-dim);
+    line-height: 1;
+}
+.ws-dir .node-label {
+    font-size: 8px;
+    max-width: 48px;
+    text-align: center;
+    line-height: 1.1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-muted);
+}
+.ws-dir .node-handle {
+    position: absolute;
+    right: -2px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--glass-border);
+    border: 1.5px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.15s ease;
+    z-index: 2;
+}
+.ws-dir:hover .node-handle {
     background: var(--accent);
     border-color: var(--accent);
     box-shadow: 0 0 8px var(--accent-glow);
 }
 
 /* ─── Selected nodes ─── */
-.graph-node.selected {
-    border-color: var(--accent);
-    background: rgba(74, 158, 255, 0.1);
-    box-shadow: 0 0 12px var(--accent-glow);
+.ws-node.selected {
+    border-color: var(--accent) !important;
+    background: rgba(74, 158, 255, 0.1) !important;
+    box-shadow: 0 0 12px var(--accent-glow) !important;
 }
-.graph-node.selected .node-handle {
+.ws-node.selected .node-handle {
     background: var(--accent);
     border-color: var(--accent);
+}
+
+/* ─── Orbit state (children fanned out around parent) ─── */
+.ws-node.orbit {
+    /* Parent node in orbit state gets special styling */
+    box-shadow: 0 0 16px rgba(74, 158, 255, 0.3) !important;
+    border-color: var(--accent) !important;
+}
+
+/* ─── Expanded state (directory contents shown) ─── */
+.ws-node.expanded {
+    /* Expanded directory node gets special styling */
+    box-shadow: 0 0 20px rgba(74, 158, 255, 0.4) !important;
+    border-color: var(--accent) !important;
+    background: rgba(74, 158, 255, 0.15) !important;
 }
 
 /* ─── Nested nodes (contained by a parent path) ─── */

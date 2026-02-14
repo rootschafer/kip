@@ -10,11 +10,14 @@ use crate::ui::file_picker::PickerManager;
 use crate::ui::graph_types::*;
 use crate::ui::container_components::*;
 
-const CONTAINER_WIDTH: f64 = 200.0;
-const CONTAINER_GAP: f64 = 32.0;
-const NODE_HEIGHT: f64 = 36.0;
-const NODE_GAP: f64 = 4.0;
-const GRAPH_PADDING: f64 = 24.0;
+// Workspace grid layout constants (temporary until force-directed layout)
+const GRID_COLS: usize = 4;
+const GRID_SPACING_X: f64 = 180.0;
+const GRID_SPACING_Y: f64 = 100.0;
+const WORKSPACE_PADDING: f64 = 40.0;
+const NODE_WIDTH_FILE: f64 = 150.0;
+const NODE_HEIGHT_FILE: f64 = 36.0;
+const NODE_SIZE_DIR: f64 = 56.0;
 
 // ─── Typed DB response structs ───────────────────────────────
 
@@ -94,7 +97,6 @@ pub(crate) enum DragState {
 #[derive(Debug, Clone, PartialEq)]
 enum AddPanelState {
     Closed,
-    PickTarget,
     AddMachine,
 }
 
@@ -131,12 +133,13 @@ pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
         None => (Vec::new(), Vec::new(), Vec::new(), 0i64),
     };
 
-    let canvas_width = if containers.is_empty() {
-        800.0
-    } else {
-        (containers.len() as f64) * (CONTAINER_WIDTH + CONTAINER_GAP) + CONTAINER_GAP + GRAPH_PADDING * 2.0
-    };
-    let canvas_height = 600.0;
+    // Build color map for node tinting
+    let color_map: HashMap<String, String> = containers.iter()
+        .map(|c| (rid_string(&c.id), c.color.clone()))
+        .collect();
+
+    let canvas_width = 1200.0_f64;
+    let canvas_height = 800.0_f64;
 
     let node_positions: Vec<(String, f64, f64)> = nodes
         .iter()
@@ -163,39 +166,55 @@ pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
     };
 
     rsx! {
-        div { 
+        div {
             class: "graph-area",
-            div { 
+            // ─── Toolbar: status + machine chips + add button ───
+            div {
                 class: "graph-toolbar",
-                div { 
+                div {
                     class: "{status_class}",
                     if review_count > 0 {
-                        span { 
-                            class: "status-count", 
-                            "{status_count}" 
-                        }
-                        span { 
+                        span { class: "status-count", "{status_count}" }
+                        span {
                             class: "status-label",
-                            if review_count == 1 {
-                                "issue"
-                            } else {
-                                "issues"
-                            }
+                            if review_count == 1 { "issue" } else { "issues" }
                         }
                     }
                 }
-                button {
-                    class: "btn-add",
-                    onclick: move |_| *add_panel.write() = AddPanelState::PickTarget,
-                    "+"
+                div {
+                    class: "machine-chips",
+                    for container in containers.iter() {
+                        MachineChip {
+                            container: container.clone(),
+                            on_click: move |c: ContainerView| {
+                                if !c.connected {
+                                    warn!("cannot add to disconnected target");
+                                    return;
+                                }
+                                let cid = rid_string(&c.id);
+                                let name = c.name.clone();
+                                let root = c.mount_point.clone().unwrap_or_else(|| "/".to_string());
+                                picker.open(cid, name, std::path::PathBuf::from(root));
+                            },
+                        }
+                    }
+                    button {
+                        class: "btn-add",
+                        onclick: move |_| {
+                            *machine_name.write() = String::new();
+                            *machine_host.write() = String::new();
+                            *machine_user.write() = String::new();
+                            *add_panel.write() = AddPanelState::AddMachine;
+                        },
+                        "+"
+                    }
                 }
             }
 
+            // ─── Workspace: free nodes + SVG edges ───
             div {
-                class: "graph-wrapper",
-                // Mouse handlers for drag/lasso
+                class: "workspace",
                 onmousedown: move |e: MouseEvent| {
-                    // Shift+drag on empty space = lasso
                     if e.modifiers().shift() {
                         let coords = e.page_coordinates();
                         *drag.write() = DragState::Lasso {
@@ -205,7 +224,6 @@ pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
                             current_y: coords.y,
                         };
                     } else {
-                        // Click on empty space = deselect all
                         selected.write().clear();
                     }
                 },
@@ -242,12 +260,10 @@ pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
                                 info!("drag cancelled (released on empty space)");
                             }
                             DragState::Lasso { start_x, start_y, current_x, current_y } => {
-                                // Select nodes within the lasso rectangle
                                 let min_x = start_x.min(current_x);
                                 let max_x = start_x.max(current_x);
                                 let min_y = start_y.min(current_y);
                                 let max_y = start_y.max(current_y);
-
                                 let mut sel = selected.write();
                                 for node in &nodes_for_lasso {
                                     let cx = node.center_x();
@@ -262,213 +278,156 @@ pub fn MappingGraph(refresh_tick: u32, on_changed: EventHandler) -> Element {
                         *drag.write() = DragState::None;
                     }
                 },
-                div {
-                    class: "graph-html-layer",
-                    style: "width: {canvas_width}px; min-height: {canvas_height}px;",
-                    // SVG overlay for edges + rubber band + lasso
-                    svg {
-                        class: "graph-svg-overlay",
-                        width: "{canvas_width}",
-                        height: "{canvas_height}",
-                        style: "width: {canvas_width}px; height: {canvas_height}px;",
-                        for edge in edges.iter() {
-                            {
-                                let source_pos = node_positions.iter().find(|(id, _, _)| *id == edge.source_id);
-                                let dest_pos = node_positions.iter().find(|(id, _, _)| *id == edge.dest_id);
-                                if let (Some((_, sx, sy)), Some((_, dx, dy))) = (source_pos, dest_pos) {
-                                    let path_d = bezier_path(*sx, *sy, *dx, *dy);
-                                    let color = edge_color(&edge.status);
-                                    let width = if edge.status == "transferring" || edge.status == "scanning" {
-                                        "3"
-                                    } else {
-                                        "2"
-                                    };
-                                    let key = rid_string(&edge.intent_id);
-                                    rsx! {
-                                        path {
-                                            key: "{key}",
-                                            d: "{path_d}",
-                                            stroke: "{color}",
-                                            stroke_width: "{width}",
-                                            fill: "none",
-                                            stroke_linecap: "round",
-                                            opacity: "0.7",
-                                        }
+
+                // SVG overlay for edges + rubber band + lasso
+                svg {
+                    class: "workspace-svg",
+                    width: "{canvas_width}",
+                    height: "{canvas_height}",
+                    style: "width: {canvas_width}px; height: {canvas_height}px;",
+                    for edge in edges.iter() {
+                        {
+                            let source_pos = node_positions.iter().find(|(id, _, _)| *id == edge.source_id);
+                            let dest_pos = node_positions.iter().find(|(id, _, _)| *id == edge.dest_id);
+                            if let (Some((_, sx, sy)), Some((_, dx, dy))) = (source_pos, dest_pos) {
+                                let path_d = bezier_path(*sx, *sy, *dx, *dy);
+                                let color = edge_color(&edge.status);
+                                let width = if edge.status == "transferring" || edge.status == "scanning" { "3" } else { "2" };
+                                let key = rid_string(&edge.intent_id);
+                                rsx! {
+                                    path {
+                                        key: "{key}",
+                                        d: "{path_d}",
+                                        stroke: "{color}",
+                                        stroke_width: "{width}",
+                                        fill: "none",
+                                        stroke_linecap: "round",
+                                        opacity: "0.7",
                                     }
-                                } else {
-                                    rsx! {}
                                 }
-                            }
-                        }
-
-                        // Rubber-band line
-                        if let DragState::CreatingEdge { source_x, source_y, mouse_x, mouse_y, .. } = *drag.read() {
-                            line {
-                                x1: "{source_x}",
-                                y1: "{source_y}",
-                                x2: "{mouse_x}",
-                                y2: "{mouse_y}",
-                                stroke: "#4a9eff",
-                                stroke_width: "2",
-                                stroke_dasharray: "6 4",
-                                stroke_linecap: "round",
-                                opacity: "0.8",
-                            }
-                        }
-
-                        // Lasso rectangle (values pre-computed above)
-                        if lasso_active {
-                            rect {
-                                x: "{lasso_x}",
-                                y: "{lasso_y}",
-                                width: "{lasso_w}",
-                                height: "{lasso_h}",
-                                fill: "rgba(74, 158, 255, 0.08)",
-                                stroke: "#4a9eff",
-                                stroke_width: "1",
-                                stroke_dasharray: "4 3",
-                                rx: "4",
+                            } else {
+                                rsx! {}
                             }
                         }
                     }
 
-                    // HTML containers
-                    for container in containers.iter() {
-                        GraphContainer {
-                            container: container.clone(),
-                            nodes: nodes.clone(),
-                            selected: selected,
-                            drag: drag,
-                            expansion_state: expansion_state,
-                            db: db.clone(),
-                            on_changed: on_changed,
+                    // Rubber-band line
+                    if let DragState::CreatingEdge { source_x, source_y, mouse_x, mouse_y, .. } = *drag.read() {
+                        line {
+                            x1: "{source_x}",
+                            y1: "{source_y}",
+                            x2: "{mouse_x}",
+                            y2: "{mouse_y}",
+                            stroke: "#4a9eff",
+                            stroke_width: "2",
+                            stroke_dasharray: "6 4",
+                            stroke_linecap: "round",
+                            opacity: "0.8",
+                        }
+                    }
+
+                    // Lasso rectangle
+                    if lasso_active {
+                        rect {
+                            x: "{lasso_x}",
+                            y: "{lasso_y}",
+                            width: "{lasso_w}",
+                            height: "{lasso_h}",
+                            fill: "rgba(74, 158, 255, 0.08)",
+                            stroke: "#4a9eff",
+                            stroke_width: "1",
+                            stroke_dasharray: "4 3",
+                            rx: "4",
+                        }
+                    }
+                }
+
+                // Free nodes in workspace
+                for node in nodes.iter() {
+                    {
+                        let color = color_map.get(&node.container_id).cloned().unwrap_or_default();
+                        rsx! {
+                            WorkspaceNode {
+                                node: node.clone(),
+                                color: color,
+                                selected: selected,
+                                drag: drag,
+                                expansion_state: expansion_state,
+                                db: db.clone(),
+                                on_changed: on_changed,
+                            }
                         }
                     }
                 }
             }
 
-            // Add panel overlay
-            if *add_panel.read() != AddPanelState::Closed {
+            // ─── Add machine panel ───
+            if *add_panel.read() == AddPanelState::AddMachine {
                 div {
                     class: "add-panel-overlay",
                     onclick: move |_| *add_panel.write() = AddPanelState::Closed,
                     div {
                         class: "add-panel",
                         onclick: move |e: MouseEvent| e.stop_propagation(),
-                        match &*add_panel.read() {
-                            AddPanelState::PickTarget => rsx! {
-                                div { class: "add-panel-title", "Add location" }
-                                div { class: "add-panel-list",
-                                    for container in containers.iter() {
-                                        {
-                                            let cid = rid_string(&container.id);
-                                            let color = container.color.clone();
-                                            let name = container.name.clone();
-                                            let connected = container.connected;
-                                            let detail = if connected { container.kind.clone() } else { "offline".into() };
-                                            let mount_point = container.mount_point.clone();
-
-                                            rsx! {
-                                                div {
-                                                    key: "{cid}",
-                                                    class: "add-panel-item",
-                                                    onclick: {
-                                                        let cid = cid.clone();
-                                                        let mount_point = mount_point.clone();
-                                                        let name = name.clone();
-                                                        move |_| {
-                                                            if !connected {
-                                                                warn!("cannot add to disconnected target");
-                                                                return;
-                                                            }
-                                                            let root = mount_point.clone().unwrap_or_else(|| "/".to_string());
-                                                            picker.open(cid.clone(), name.clone(), std::path::PathBuf::from(root));
-                                                            *add_panel.write() = AddPanelState::Closed;
-                                                        }
-                                                    },
-                                                    div { class: "item-dot", style: "background: {color};" }
-                                                    span { class: "item-name", "{name}" }
-                                                    span { class: "item-detail", "{detail}" }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    div { class: "add-panel-divider" }
-                                    div {
-                                        class: "add-panel-item add-machine",
-                                        onclick: move |_| {
-                                            *machine_name.write() = String::new();
-                                            *machine_host.write() = String::new();
-                                            *machine_user.write() = String::new();
-                                            *add_panel.write() = AddPanelState::AddMachine;
-                                        },
-                                        span { class: "item-name", "+ Add remote machine" }
-                                    }
+                        div { class: "add-panel-title", "Add remote machine" }
+                        div { class: "add-machine-form",
+                            div { class: "form-field",
+                                label { "Name" }
+                                input {
+                                    value: "{machine_name}",
+                                    placeholder: "My Server",
+                                    oninput: move |e| *machine_name.write() = e.value(),
                                 }
-                            },
-                            AddPanelState::AddMachine => rsx! {
-                                div { class: "add-panel-title", "Add remote machine" }
-                                div { class: "add-machine-form",
-                                    div { class: "form-field",
-                                        label { "Name" }
-                                        input {
-                                            value: "{machine_name}",
-                                            placeholder: "My Server",
-                                            oninput: move |e| *machine_name.write() = e.value(),
-                                        }
-                                    }
-                                    div { class: "form-field",
-                                        label { "Hostname" }
-                                        input {
-                                            value: "{machine_host}",
-                                            placeholder: "192.168.1.100 or server.local",
-                                            oninput: move |e| *machine_host.write() = e.value(),
-                                        }
-                                    }
-                                    div { class: "form-field",
-                                        label { "SSH User" }
-                                        input {
-                                            value: "{machine_user}",
-                                            placeholder: "root",
-                                            oninput: move |e| *machine_user.write() = e.value(),
-                                        }
-                                    }
-                                    div { class: "form-actions-row",
-                                        button {
-                                            class: "btn-ghost",
-                                            onclick: move |_| *add_panel.write() = AddPanelState::PickTarget,
-                                            "Back"
-                                        }
-                                        button {
-                                            class: "btn-primary",
-                                            disabled: machine_host().trim().is_empty(),
-                                            onclick: {
-                                                let db = db.clone();
-                                                move |_| {
-                                                    let name = machine_name().trim().to_string();
-                                                    let host = machine_host().trim().to_string();
-                                                    let user = machine_user().trim().to_string();
-                                                    let db = db.clone();
-                                                    let on_changed = on_changed;
-                                                    let mut add_panel = add_panel;
-                                                    spawn(async move {
-                                                        match add_remote_machine(&db, &name, &host, &user).await {
-                                                            Ok(()) => {
-                                                                info!("remote machine added: {}", host);
-                                                                on_changed.call(());
-                                                            }
-                                                            Err(e) => error!("add machine failed: {}", e),
-                                                        }
-                                                        *add_panel.write() = AddPanelState::Closed;
-                                                    });
-                                                }
-                                            },
-                                            "Add"
-                                        }
-                                    }
+                            }
+                            div { class: "form-field",
+                                label { "Hostname" }
+                                input {
+                                    value: "{machine_host}",
+                                    placeholder: "192.168.1.100 or server.local",
+                                    oninput: move |e| *machine_host.write() = e.value(),
                                 }
-                            },
-                            AddPanelState::Closed => rsx! {},
+                            }
+                            div { class: "form-field",
+                                label { "SSH User" }
+                                input {
+                                    value: "{machine_user}",
+                                    placeholder: "root",
+                                    oninput: move |e| *machine_user.write() = e.value(),
+                                }
+                            }
+                            div { class: "form-actions-row",
+                                button {
+                                    class: "btn-ghost",
+                                    onclick: move |_| *add_panel.write() = AddPanelState::Closed,
+                                    "Cancel"
+                                }
+                                button {
+                                    class: "btn-primary",
+                                    disabled: machine_host().trim().is_empty(),
+                                    onclick: {
+                                        let db = db.clone();
+                                        move |_| {
+                                            let name = machine_name().trim().to_string();
+                                            let host = machine_host().trim().to_string();
+                                            let user = machine_user().trim().to_string();
+                                            let db = db.clone();
+                                            let on_changed = on_changed;
+                                            let mut add_panel = add_panel;
+                                            spawn(async move {
+                                                match add_remote_machine(&db, &name, &host, &user).await {
+                                                    Ok(()) => {
+                                                        info!("remote machine added: {}", host);
+                                                        on_changed.call(());
+                                                    }
+                                                    Err(e) => error!("add machine failed: {}", e),
+                                                }
+                                                *add_panel.write() = AddPanelState::Closed;
+                                            });
+                                        }
+                                    },
+                                    "Add"
+                                }
+                            }
                         }
                     }
                 }
@@ -508,8 +467,8 @@ async fn load_containers(db: &DbHandle) -> Result<Vec<ContainerView>, String> {
             name: m.name.clone(),
             kind: if is_local { "local".into() } else { "remote".into() },
             color: palette_color(i).to_string(),
-            x: GRAPH_PADDING + (i as f64) * (CONTAINER_WIDTH + CONTAINER_GAP),
-            y: GRAPH_PADDING,
+            x: 0.0,  // Positioning is handled by toolbar layout
+            y: 0.0,  // Positioning is handled by toolbar layout
             connected: true,
             mount_point: if is_local { dirs_home() } else { None },
         });
@@ -527,8 +486,8 @@ async fn load_containers(db: &DbHandle) -> Result<Vec<ContainerView>, String> {
             name: d.name.clone(),
             kind: "drive".into(),
             color: palette_color(offset + i).to_string(),
-            x: GRAPH_PADDING + ((offset + i) as f64) * (CONTAINER_WIDTH + CONTAINER_GAP),
-            y: GRAPH_PADDING,
+            x: 0.0,  // Positioning is handled by toolbar layout
+            y: 0.0,  // Positioning is handled by toolbar layout
             connected: d.connected,
             mount_point: d.mount_point.clone(),
         });
@@ -550,9 +509,8 @@ async fn load_nodes(
         .await.map_err(|e| e.to_string())?;
     let rows: Vec<LocationRow> = resp.take(0).map_err(|e| e.to_string())?;
 
-    let mut grouped: std::collections::HashMap<String, Vec<&LocationRow>> =
-        std::collections::HashMap::new();
-
+    // Group locations by their owner (machine or drive)
+    let mut grouped: HashMap<String, Vec<&LocationRow>> = HashMap::new();
     for row in &rows {
         let owner_id = row.machine.as_ref().or(row.drive.as_ref());
         let owner_id = match owner_id {
@@ -566,15 +524,56 @@ async fn load_nodes(
         grouped.entry(rid_string(&container.id)).or_default().push(row);
     }
 
+    // Build nodes with workspace-absolute grid positions
     let mut nodes = Vec::new();
-    let mut container_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-
-    const HEADER_H: f64 = 44.0;
-    const PADDING_X: f64 = 8.0;
-    const INDENT_PX: f64 = 12.0;
+    let mut node_index = 0usize;
 
     for container in containers {
         let cid = rid_string(&container.id);
+        
+        // Add root folder node for each container that has a mount point
+        if let Some(mount_point) = &container.mount_point {
+            // Check if this mount point already exists as a location to avoid duplicates
+            let already_exists = grouped.get(&cid).map_or(false, |group| {
+                group.iter().any(|row| row.path == *mount_point)
+            });
+            
+            if !already_exists {
+                // Count direct children in the filesystem for this root directory
+                let child_count = count_direct_children_in_filesystem(mount_point)?;
+                
+                let is_dir = true; // Root directories are always directories
+                let depth = 0; // Root level
+                
+                // Grid position in workspace
+                let col = node_index % GRID_COLS;
+                let row_num = node_index / GRID_COLS;
+                let (width, height) = if is_dir {
+                    (NODE_SIZE_DIR, NODE_SIZE_DIR)
+                } else {
+                    (NODE_WIDTH_FILE, NODE_HEIGHT_FILE)
+                };
+
+                nodes.push(NodeView {
+                    id: create_virtual_record_id(&format!("{}_root", cid)), // Create a virtual ID for the root
+                    container_id: cid.clone(),
+                    path: mount_point.clone(),
+                    label: short_path(mount_point),
+                    x: WORKSPACE_PADDING + (col as f64) * GRID_SPACING_X,
+                    y: WORKSPACE_PADDING + (row_num as f64) * GRID_SPACING_Y,
+                    width,
+                    height,
+                    depth,
+                    is_dir,
+                    is_expanded: false,
+                    is_orbit: false,
+                    child_count,
+                });
+                node_index += 1;
+            }
+        }
+        
+        // Process existing locations for this container
         let group = match grouped.get(&cid) {
             Some(g) => g,
             None => continue,
@@ -583,9 +582,6 @@ async fn load_nodes(
 
         for row in group {
             let depth = compute_depth(&row.path, &all_paths);
-            let count = container_counts.entry(cid.clone()).or_insert(0);
-            let node_y = container.y + HEADER_H + (*count as f64) * (NODE_HEIGHT + NODE_GAP) + NODE_GAP;
-            *count += 1;
 
             // Count direct children among sibling locations
             let parent_parts: Vec<&str> = row.path.split('/').filter(|s| !s.is_empty()).collect();
@@ -597,30 +593,37 @@ async fn load_nodes(
                 })
                 .count();
 
-            // A node is a directory if it has children among sibling locations,
-            // or if the filesystem says so (fast metadata check)
             let is_dir = if child_count > 0 {
                 true
             } else {
                 std::path::Path::new(&row.path).is_dir()
             };
 
-            let indent = depth as f64 * INDENT_PX;
+            // Grid position in workspace
+            let col = node_index % GRID_COLS;
+            let row_num = node_index / GRID_COLS;
+            let (width, height) = if is_dir {
+                (NODE_SIZE_DIR, NODE_SIZE_DIR)
+            } else {
+                (NODE_WIDTH_FILE, NODE_HEIGHT_FILE)
+            };
+
             nodes.push(NodeView {
                 id: row.id.clone(),
                 container_id: cid.clone(),
                 path: row.path.clone(),
                 label: short_path(&row.path),
-                x: container.x + PADDING_X + indent,
-                y: node_y,
-                width: CONTAINER_WIDTH - PADDING_X * 2.0 - indent,
-                height: NODE_HEIGHT,
+                x: WORKSPACE_PADDING + (col as f64) * GRID_SPACING_X,
+                y: WORKSPACE_PADDING + (row_num as f64) * GRID_SPACING_Y,
+                width,
+                height,
                 depth,
                 is_dir,
                 is_expanded: false,
                 is_orbit: false,
                 child_count,
             });
+            node_index += 1;
         }
     }
 
@@ -695,6 +698,42 @@ async fn create_edge(db: &DbHandle, source_id: &str, dest_id: &str) -> Result<()
         .check().map_err(|e| e.to_string())?;
 
     Ok(())
+}
+
+fn count_direct_children_in_filesystem(path: &str) -> Result<usize, String> {
+    let path = std::path::Path::new(path);
+    if !path.exists() {
+        return Ok(0);
+    }
+    
+    if !path.is_dir() {
+        return Ok(0);
+    }
+    
+    let mut count = 0;
+    match std::fs::read_dir(path) {
+        Ok(entries) => {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    if entry.path().is_dir() || entry.path().is_file() {
+                        count += 1;
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            return Err(format!("Failed to read directory {}: {}", path.display(), e));
+        }
+    }
+    
+    Ok(count)
+}
+
+fn create_virtual_record_id(key: &str) -> RecordId {
+    RecordId {
+        table: "virtual".into(),
+        key: surrealdb::types::RecordIdKey::String(key.to_string()),
+    }
 }
 
 async fn add_remote_machine(db: &DbHandle, name: &str, hostname: &str, ssh_user: &str) -> Result<(), String> {
