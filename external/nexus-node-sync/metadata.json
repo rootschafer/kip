@@ -1,0 +1,5 @@
+{
+  "name": "Nexus Node Sync",
+  "description": "A force-directed, crash-resilient file system visualization and synchronization manager. Orchestrate files across local, cloud, and remote systems using an interactive node graph.",
+  "requestFramePermissions": []
+}

@@ -1,103 +1,262 @@
 # Kip Development: Getting Started
 
-## Critical Protocol: Design Documentation Accuracy
+## ⚠️ CRITICAL: Read This First
 
-**DO NOT mark features as complete unless you have personally verified they work in the running application.** 
+**DO NOT start coding until you have:**
+1. Read this entire document
+2. Reviewed the TypeScript reference implementation in `external/nexus-node-sync/`
+3. Understood the infinite loop pitfalls documented below
+4. Reviewed the current state of implementation
 
-Design documentation in `./notes/the_design/` serves as the authoritative reference for:
-- Current implementation status
-- Feature completeness for handoffs between AI agents
-- Planning for future development phases
+## Project Overview
 
-**False completion markers cause cascading issues:**
-- Future agents waste time implementing already-completed features
-- Agents break working code trying to "fix" non-existent issues
-- Development velocity decreases due to miscommunication
+Kip is a file synchronization orchestrator built with **Dioxus (Rust)** + **SurrealDB**. The primary interface is a **force-directed graph** where users visualize and manage file sync relationships between devices, folders, and files.
 
-**Verification protocol:**
-1. Run the application with `dx serve --platform desktop`
-2. Manually test the feature in the UI
-3. Confirm it behaves as specified in the design docs
-4. Only then update the completion status
+## Reference Implementation
 
-## Directory Overview
+**Location:** `external/nexus-node-sync/`
 
-### Core Architecture
-- `KIP_DESIGN_1.md` — High-level vision and architecture overview
-- `KIP_DESIGN_2_DATA_MODEL.md` — Database schema and data relationships
-- `KIP_DESIGN_3_INTENT_LIFECYCLE.md` — Transfer intent states and progression
-- `KIP_DESIGN_4_ARCHITECTURE.md` — Technical architecture and component relationships
-- `KIP_DESIGN_5_ERROR_HANDLING.md` — Error classification and user review system
+A complete TypeScript/React implementation using D3.js force-directed graphs exists. Your job is to **port the concepts and patterns** (not copy code directly) to Dioxus/Rust.
 
-### UI Components
-- `KIP_DESIGN_6_MVP.md` — Minimum viable product features and scope
-- `KIP_DESIGN_7_MAPPING_GRAPH.md` — Main graph UI, nodes, edges, and interactions
-- `KIP_DESIGN_8_FILE_PICKER.md` — Custom file picker with column navigation
+**Key files to study:**
+- `external/nexus-node-sync/types.ts` - Node/Link data structures
+- `external/nexus-node-sync/App.tsx` - Main app logic, state management, interaction handlers
+- `external/nexus-node-sync/components/GraphCanvas.tsx` - **D3 force-directed graph implementation**
+- `external/nexus-node-sync/services/mockFileSystem.ts` - Mock data generation
 
-### Implementation Guides
-- `CIRCULAR_NODES_IMPLEMENTATION.md` — Technical guide for directory circle nodes
-- `FILE_PICKER_IMPLEMENTATION.md` — File picker component implementation details
-- `COMPREHENSIVE_DEVELOPMENT_PLAN.md` — Overall roadmap from prototype to production
-- `IMPLEMENTATION_SUMMARY.md` — Brief summary of current implementation status
+## Current State
 
-### Agent Coordination
-- `AGENTS.md` — Technical reference for Dioxus/SurrealDB patterns and gotchas
-- `START_HERE.md` — This file, explaining design doc protocols
+### ✅ Completed
+- Basic Dioxus app structure with SurrealDB integration
+- Database schema for machines, drives, locations, intents (sync rules), review_items
+- File picker component for selecting locations
+- Notification system with toast notifications
+- Review queue for conflict resolution
+- Graph component structure (nodes, edges, toolbar)
 
-## Updating Design Documents
+### ❌ NOT Working / Needs Implementation
+- **Force-directed graph layout** - Currently using static grid layout
+- **Node expansion** - Directory circles should expand to show children
+- **Orbit view** - Children should fan out around parent nodes
+- **Node grouping** - Select multiple nodes → group into collapsible container
+- **Edge creation** - Drag from node to node to create sync relationship
+- **Lasso selection** - Shift+drag to select multiple nodes
+- **Proper node rendering** - Nodes should be circles (directories/groups) or pills (files)
 
-### Task Status System
-Features/tasks use a four-state system:
+### 🐛 Critical Issues Fixed (DO NOT REPEAT)
 
-1. **[ ]** (empty box) - NOT_STARTED: Feature hasn't been implemented
-2. **[~]** (tilde) - PARTIALLY_DONE: Feature has some implementation but is incomplete
-3. **[√]** (checkmark) - AI_THINKS_DONE: AI believes implementation is complete but hasn't been validated by user
-4. **[x]** (x) - VALIDATED_COMPLETE: User has verified the feature works as specified
+**Infinite Loop #1 - Spawns in Component Body**
+```rust
+// ❌ WRONG - Creates new spawn on EVERY render
+spawn(async move {
+    loop {
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        *refresh_tick.write() += 1;
+    }
+});
 
-### When to Update
-- **After implementing** a feature (mark as [√] AI_THINKS_DONE)
-- **After verifying** functionality works end-to-end (upgrade to [x] VALIDATED_COMPLETE)
-- **When discovering existing implementation** that wasn't properly documented
-- **When design specifications change** based on implementation insights
+// ✅ CORRECT - Wrap in use_effect so it only runs once
+use_effect(move || {
+    spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            *refresh_tick.write() += 1;
+        }
+    });
+});
+```
 
-### How to Update
-1. **For partial completion**: Use [~] and add "(PARTIAL)" to description
-2. **For believed completion**: Use [√] and add "(AI CONFIRMED)" to description
-3. **For user-validated completion**: Use [x] and add "(USER VERIFIED)" to description
-4. **For unimplemented**: Keep as [ ] 
-5. **Keep descriptions factual**, not aspirational
-6. **Note any deviations** from original design with brief explanations
+**Infinite Loop #2 - Resource Updating Signals**
+```rust
+// ❌ WRONG - Resource captures graph signal, creates loop
+use_resource(move || {
+    let graph_val = graph.clone();
+    async move {
+        let data = load_data().await;
+        graph_val.with_mut(|g| g.load(data)); // Triggers re-render!
+    }
+});
 
-### Verification Checklist
-Before upgrading from [√] to [x], verify:
-- [ ] Feature works in the running application
-- [ ] Matches the specified behavior in design docs
-- [ ] Doesn't break existing functionality
-- [ ] Handles edge cases reasonably
-- [ ] Performance is acceptable
+// ✅ CORRECT - Separate resource and effect
+let loaded_data = use_resource(move || {
+    async move { load_data().await.ok() }
+});
 
-## Handoff Protocol
+use_effect(move || {
+    if let Some(data) = loaded_data.read().as_ref() {
+        graph.with_mut(|g| g.load(data));
+    }
+});
+```
 
-When ending a development session:
-1. Update design docs to reflect actual implementation status
-2. Document any design changes or discoveries
-3. Note any issues or gotchas for the next agent
-4. Ensure all changes compile and basic functionality works
+**Infinite Loop #3 - Signal Capture in Closures**
+```rust
+// ❌ WRONG - Captures signal, not value
+use_resource(move || {
+    let _tick = refresh_tick; // Captures the Signal<u32>
+    async move { ... }
+});
 
-## Critical Current Issues
+// ✅ CORRECT - Capture the value
+use_resource(move || {
+    let tick = refresh_tick; // Captures the u32 VALUE
+    async move {
+        let _ = tick; // Use it to create dependency
+        ...
+    }
+});
+```
 
-When working on the directory expansion functionality, pay special attention to these known issues:
-1. **SVG Coordinate System Alignment**: Mouse coordinates don't align with SVG overlay coordinates, causing cursor offset in edge creation
-2. **Click vs Drag Detection**: Current implementation interferes with edge creation when trying to expand nodes
-3. **Orbit View Implementation**: Children not properly fanned out around parent nodes in orbit state
-4. **Enter View Implementation**: Workspace not properly filtered to show only direct children of entered directory
+**Disk Space Issue - Logging**
+```rust
+// ❌ WRONG - File logging enabled (created 209GB log file!)
+tracing_subscriber::registry()
+    .with(tracing_subscriber::fmt::layer().with_writer(file_appender))
+    .init();
 
-## Key Implementation Notes
+// ✅ CORRECT - Console only, WARN level
+tracing_subscriber::fmt()
+    .with_max_level(tracing::Level::WARN)
+    .init();
+```
 
-- The PickerManager is now implemented as a Store for reactive state management
-- Directory nodes have dynamic sizing based on total descendant count
-- Expansion state is tracked as (is_orbit, is_expanded) tuples in a HashMap
-- Use the async move { ... } pattern for event handlers that need async functionality
-- The workspace uses absolute positioning with temporary grid layout (to be replaced with force-directed)
+## Architecture
 
-Remember: The design docs are the single source of truth for project status. Accuracy is paramount for efficient development.
+### Data Flow
+```
+User Action → EventHandler → Signal Update → use_effect → Database/Resource → Signal Update → UI Re-render
+```
+
+### Key Components
+- `src/main.rs` - App entry point, logging setup
+- `src/app.rs` - Root component, global state (refresh_tick, picker, notifications)
+- `src/ui/graph.rs` - Main graph component (MappingGraph)
+- `src/ui/graph_store.rs` - Graph state management (Graph struct)
+- `src/ui/graph_nodes.rs` - Node rendering components
+- `src/ui/graph_edges.rs` - SVG edge overlay
+- `src/ui/graph_types.rs` - Type definitions (GraphNode, GraphEdge, etc.)
+- `src/ui/file_picker.rs` - File picker for selecting locations
+- `src/ui/notification.rs` - Toast notification system
+
+### Database Schema (SurrealDB)
+- `machine` - Computers (local or remote via SSH)
+- `drive` - Mounted drives
+- `location` - File paths on machines/drives
+- `intent` - Sync relationships between locations
+- `review_item` - Conflicts requiring user resolution
+
+## Development Guidelines
+
+### Dioxus Patterns
+
+**State Management:**
+- Use `use_signal<T>` for local component state
+- Use `use_store(|| Store::new())` for global app state
+- Use `use_context::<T>()` to access shared resources (like DbHandle)
+- Use `use_resource` for async data loading
+- Use `use_effect` for side effects (spawns, subscriptions)
+
+**Event Handlers:**
+```rust
+#[component]
+pub fn MyComponent(
+    on_click: EventHandler<MouseEvent>,
+    on_data: EventHandler<String>,
+) -> Element {
+    rsx! {
+        button {
+            onclick: move |e| on_click.call(e),
+            "Click me"
+        }
+    }
+}
+```
+
+**Async Operations:**
+```rust
+spawn(async move {
+    let result = some_async_operation().await;
+    // Update state
+    state.write().value = result;
+});
+```
+
+### Force-Directed Graph Requirements
+
+**Node Types:**
+- **Circles** - Directories, groups, devices (expandable)
+- **Pills** - Files (leaf nodes)
+- **Size** - Based on descendant count (logarithmic scale)
+
+**Interactions:**
+- **Click circle** - Expand to show children (orbit view first, then enter)
+- **Drag node** - Move node (physics simulation)
+- **Shift+click** - Multi-select
+- **Shift+drag background** - Lasso selection
+- **Drag from node to node** - Create sync edge
+- **Right-click** - Context menu
+
+**Physics Forces:**
+- **Repulsion** - Nodes push apart (forceManyBody)
+- **Link attraction** - Connected nodes pull together (forceLink)
+- **Center gravity** - Gentle pull toward center (forceX/forceY)
+- **Collision** - Prevent overlap (forceCollide)
+
+**Visual States:**
+- Selected - Blue glow with dashed border
+- Link mode - Crosshair cursor, edge preview
+- Expanding - Children animate outward
+- Syncing - Edge pulses with color
+
+## Next Steps
+
+1. **Study the TypeScript implementation** in `external/nexus-node-sync/`
+   - Understand how D3 force simulation is configured
+   - Note how node/link data is structured
+   - Review interaction handlers (click, drag, lasso)
+
+2. **Review current Dioxus implementation**
+   - Check `src/ui/graph_store.rs` for Graph struct
+   - Review `src/ui/graph_nodes.rs` for node rendering
+   - Check `src/ui/graph_edges.rs` for edge rendering
+
+3. **Implement force-directed layout**
+   - Port D3 physics concepts to Rust (or use existing Rust force library)
+   - Update node positioning logic
+   - Add animation for node expansion
+
+4. **Test thoroughly**
+   - Ensure no infinite loops (watch for re-renders)
+   - Verify performance with 100+ nodes
+   - Test all interactions
+
+## Files to Update
+
+When making changes, update these design docs:
+- `KIP_DESIGN_7_MAPPING_GRAPH.md` - Graph UI specification
+- `Phase1/Phase1.3_Force_Directed_Layout_Implementation.md` - Force layout details
+- `IMPLEMENTATION_SUMMARY.md` - Current implementation status
+- `CRITICAL_ISSUES.md` - Any new bugs or gotchas discovered
+
+## Build Commands
+
+```bash
+# Build the app
+dx build
+
+# Run in development mode
+dx serve --platform desktop
+
+# Check without building
+dx check
+```
+
+**DO NOT use `cargo build` or `cargo check`** - Dioxus projects must use `dx` commands.
+
+## Contact
+
+If you encounter issues, document them in `CRITICAL_ISSUES.md` with:
+- What you were trying to do
+- What actually happened
+- Code snippets
+- Error messages
