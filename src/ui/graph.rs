@@ -1,30 +1,37 @@
-
 use dioxus::prelude::*;
 use tracing::{error, info};
 
-use crate::db::DbHandle;
-use crate::ui::file_picker::*;
-use crate::ui::graph_types::*;
-use crate::ui::graph_store::{Graph, load_graph_data};
-use crate::ui::graph_nodes::*;
-use crate::ui::graph_edges::*;
-use crate::ui::notification::{NotificationService, NotificationServiceStoreImplExt};
-use crate::ui::container_components::*;
+use crate::{
+	db::DbHandle,
+	ui::{
+		container_components::*,
+		file_picker::*,
+		graph_edges::*,
+		graph_nodes::*,
+		graph_store::{load_graph_data, Graph},
+		graph_types::*,
+		notification::{NotificationService, NotificationServiceStoreImplExt},
+	},
+};
 
 // ─── Graph Toolbar Component ──────────────────────────────────
 
 #[component]
 pub fn GraphToolbar(
-    graph: Signal<Graph>,
-    containers: Vec<ContainerView>,
-    review_count: i64,
-    on_add_machine_click: EventHandler,
-    on_container_click: EventHandler<ContainerView>,
+	graph: Signal<Graph>,
+	containers: Vec<ContainerView>,
+	review_count: i64,
+	on_add_machine_click: EventHandler,
+	on_container_click: EventHandler<ContainerView>,
 ) -> Element {
-    let status_class = if review_count > 0 { "status-indicator error" } else { "status-indicator ok" };
-    let status_count = review_count;
+	let status_class = if review_count > 0 {
+		"status-indicator error"
+	} else {
+		"status-indicator ok"
+	};
+	let status_count = review_count;
 
-    rsx! {
+	rsx! {
 		div { class: "graph-toolbar",
 			div { class: if graph().sim_running { "status-indicator processing" } else { status_class },
 				// Show spinner when loading or processing
@@ -67,106 +74,106 @@ pub fn GraphToolbar(
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AddPanelState {
-    Closed,
-    AddMachine,
+	Closed,
+	AddMachine,
 }
 
 // ─── Main Mapping Graph Component ──────────────────────────────
 
 #[component]
 pub fn MappingGraph(
-    picker: Store<PickerManager>,
-    refresh_tick: u32,
-    on_changed: EventHandler,
-    notifs: Store<NotificationService>,
-    // db: Signal<DbHandle>,
+	picker: Store<PickerManager>,
+	refresh_tick: u32,
+	on_changed: EventHandler,
+	notifs: Store<NotificationService>,
+	// db: Signal<DbHandle>,
 ) -> Element {
-    let db = use_context::<DbHandle>();
-    
-    // // Create the main graph state as a signal
-    // let mut graph = use_signal(|| Graph::new());
-    
-    // Add-machine form fields
-    let mut machine_name = use_signal(|| String::new());
-    let mut machine_host = use_signal(|| String::new());
-    let mut machine_user = use_signal(|| String::new());
-    let mut add_panel = use_signal(|| AddPanelState::Closed);
+	let db = use_context::<DbHandle>();
 
-    // Create the main graph state as a signal
-    let mut graph = use_signal(|| Graph::new());
+	// // Create the main graph state as a signal
+	// let mut graph = use_signal(|| Graph::new());
 
-    // Load graph data from DB when refresh_tick changes
-    let db_for_resource = db.clone();
-    let loaded_data = use_resource(move || {
-        let db_val = db_for_resource.clone();
-        let tick = refresh_tick; // Capture tick VALUE (u32), not the signal
-        async move {
-            let _ = tick; // Use tick to create dependency
-            load_graph_data(&db_val).await.ok()
-        }
-    });
+	// Add-machine form fields
+	let mut machine_name = use_signal(|| String::new());
+	let mut machine_host = use_signal(|| String::new());
+	let mut machine_user = use_signal(|| String::new());
+	let mut add_panel = use_signal(|| AddPanelState::Closed);
 
-    // Update graph when data is loaded (only runs when loaded_data changes)
-    use_effect(move || {
-        let data = loaded_data.read();
-        if let Some(Some((containers, nodes, edges, review_count))) = data.as_ref() {
-            graph.with_mut(|g| {
-                g.load_from_db(containers.clone(), nodes.clone(), edges.clone(), *review_count);
-            });
-        }
-    });
+	// Create the main graph state as a signal
+	let mut graph = use_signal(|| Graph::new());
 
-    let canvas_width = 1200.0_f64;
-    let canvas_height = 800.0_f64;
+	// Load graph data from DB when refresh_tick changes
+	let db_for_resource = db.clone();
+	let loaded_data = use_resource(move || {
+		let db_val = db_for_resource.clone();
+		let tick = refresh_tick; // Capture tick VALUE (u32), not the signal
+		async move {
+			let _ = tick; // Use tick to create dependency
+			load_graph_data(&db_val).await.ok()
+		}
+	});
 
-    // // Start the simulation loop if running
-    // use_effect(move || {
-    //     let graph_signal = graph;
-    //     spawn(async move {
-    //         loop {
-    //             // Check if simulation should run before sleeping
-    //             let should_run = graph_signal.with(|g| g.sim_running);
-    //             if !should_run {
-    //                 // Sleep longer when not running to reduce CPU usage
-    //                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    //                 continue;
-    //             }
-    //
-    //             tokio::time::sleep(std::time::Duration::from_millis(16)).await; // ~60fps when running
-    //
-    //             let should_continue = graph_signal.with_mut(|g| {
-    //                 // Only tick if sim is still running
-    //                 if g.sim_running {
-    //                     let result = g.tick();
-    //                     result
-    //                 } else {
-    //                     false
-    //                 }
-    //             });
-    //
-    //             if !should_continue {
-    //                 // Stop the loop if simulation is not running
-    //                 break;
-    //             }
-    //         }
-    //     });
-    // });
+	// Update graph when data is loaded (only runs when loaded_data changes)
+	use_effect(move || {
+		let data = loaded_data.read();
+		if let Some(Some((containers, nodes, edges, review_count))) = data.as_ref() {
+			graph.with_mut(|g| {
+				g.load_from_db(containers.clone(), nodes.clone(), edges.clone(), *review_count);
+			});
+		}
+	});
+
+	let canvas_width = 1200.0_f64;
+	let canvas_height = 800.0_f64;
+
+	// // Start the simulation loop if running
+	// use_effect(move || {
+	//     let graph_signal = graph;
+	//     spawn(async move {
+	//         loop {
+	//             // Check if simulation should run before sleeping
+	//             let should_run = graph_signal.with(|g| g.sim_running);
+	//             if !should_run {
+	//                 // Sleep longer when not running to reduce CPU usage
+	//                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+	//                 continue;
+	//             }
+	//
+	//             tokio::time::sleep(std::time::Duration::from_millis(16)).await; // ~60fps when running
+	//
+	//             let should_continue = graph_signal.with_mut(|g| {
+	//                 // Only tick if sim is still running
+	//                 if g.sim_running {
+	//                     let result = g.tick();
+	//                     result
+	//                 } else {
+	//                     false
+	//                 }
+	//             });
+	//
+	//             if !should_continue {
+	//                 // Stop the loop if simulation is not running
+	//                 break;
+	//             }
+	//         }
+	//     });
+	// });
 
 
-                    // // let should_continue = graph_signal.with_mut(|g| {
-                    // let should_continue = graph.with_mut(|g| {
-                    //     // Only tick if sim is still running
-                    //     if g.sim_running {
-                    //         let result = g.tick();
-                    //         result
-                    //     } else {
-                    //         false
-                    //     }
-                    // });
-                    //
-                    // if !should_continue {
-                    //     // Stop the loop if simulation is not running
-    rsx! {
+	// // let should_continue = graph_signal.with_mut(|g| {
+	// let should_continue = graph.with_mut(|g| {
+	//     // Only tick if sim is still running
+	//     if g.sim_running {
+	//         let result = g.tick();
+	//         result
+	//     } else {
+	//         false
+	//     }
+	// });
+	//
+	// if !should_continue {
+	//     // Stop the loop if simulation is not running
+	rsx! {
 		div { class: "graph-area",
 			// Toolbar with status and machine chips
 			GraphToolbar {

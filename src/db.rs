@@ -1,56 +1,60 @@
 use std::path::PathBuf;
-use surrealdb::engine::local::{Db, SurrealKv};
-use surrealdb::Surreal;
+
+use surrealdb::{
+	engine::local::{Db, SurrealKv},
+	Surreal,
+};
 
 /// Wrapper around the SurrealDB handle.
 /// Clone is cheap (Arc internally).
 #[derive(Clone)]
 pub struct DbHandle {
-    pub db: Surreal<Db>,
+	pub db: Surreal<Db>,
 }
 
 impl PartialEq for DbHandle {
-    fn eq(&self, _other: &Self) -> bool {
-        true // Single global instance
-    }
+	fn eq(&self, _other: &Self) -> bool {
+		true // Single global instance
+	}
 }
 
 /// Resolve the database file path.
 /// ~/Library/Application Support/kip/kip.db
 fn db_path() -> PathBuf {
-    let home = std::env::var("HOME").expect("HOME not set");
-    let path = PathBuf::from(home)
-        .join("Library")
-        .join("Application Support")
-        .join("Kip");
-    std::fs::create_dir_all(&path).expect("Failed to create Kip data directory");
-    path.join("kip.db")
+	let home = std::env::var("HOME").expect("HOME not set");
+	let path = PathBuf::from(home)
+		.join("Library")
+		.join("Application Support")
+		.join("Kip");
+	std::fs::create_dir_all(&path).expect("Failed to create Kip data directory");
+	path.join("kip.db")
 }
 
 /// Initialize the database: connect, select ns/db, run migrations, bootstrap machine.
 pub async fn init() -> Result<DbHandle, Box<dyn std::error::Error>> {
-    let path = db_path();
-    let db = Surreal::new::<SurrealKv>(path).await?;
-    db.use_ns("kip").use_db("kip").await?;
+	let path = db_path();
+	let db = Surreal::new::<SurrealKv>(path).await?;
+	db.use_ns("kip").use_db("kip").await?;
 
-    run_migrations(&db).await?;
-    bootstrap_local_machine(&db).await?;
+	run_migrations(&db).await?;
+	bootstrap_local_machine(&db).await?;
 
-    Ok(DbHandle { db })
+	Ok(DbHandle { db })
 }
 
 /// Run schema migrations. DEFINE statements are idempotent.
 async fn run_migrations(db: &Surreal<Db>) -> Result<(), Box<dyn std::error::Error>> {
-    db.query(SCHEMA_V1).await?.check()?;
-    Ok(())
+	db.query(SCHEMA_V1).await?.check()?;
+	Ok(())
 }
 
 /// Create/update the "this machine" record on every launch.
 async fn bootstrap_local_machine(db: &Surreal<Db>) -> Result<(), Box<dyn std::error::Error>> {
-    let hostname = get_hostname();
-    tracing::info!("Bootstrapping local machine with hostname: {}", hostname);
-    let mut resp = db.query(
-        "UPSERT machine:local CONTENT {
+	let hostname = get_hostname();
+	tracing::info!("Bootstrapping local machine with hostname: {}", hostname);
+	let mut resp = db
+		.query(
+			"UPSERT machine:local CONTENT {
             name: $name,
             kind: 'local',
             hostname: $hostname,
@@ -58,24 +62,24 @@ async fn bootstrap_local_machine(db: &Surreal<Db>) -> Result<(), Box<dyn std::er
             last_seen: time::now(),
             online: true,
         }",
-    )
-    .bind(("name", hostname.clone()))
-    .bind(("hostname", hostname))
-    .await
-    .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
-    
-    resp.check()
-        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
-    
-    tracing::info!("Successfully bootstrapped local machine");
-    Ok(())
+		)
+		.bind(("name", hostname.clone()))
+		.bind(("hostname", hostname))
+		.await
+		.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+
+	resp.check()
+		.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+
+	tracing::info!("Successfully bootstrapped local machine");
+	Ok(())
 }
 
 fn get_hostname() -> String {
-    std::process::Command::new("hostname")
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_else(|_| "unknown".to_string())
+	std::process::Command::new("hostname")
+		.output()
+		.map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+		.unwrap_or_else(|_| "unknown".to_string())
 }
 
 const SCHEMA_V1: &str = "
