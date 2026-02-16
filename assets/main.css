@@ -189,6 +189,15 @@ body {
     background: var(--red);
     box-shadow: 0 0 6px rgba(248, 113, 113, 0.4);
 }
+
+.status-indicator.processing {
+    position: relative;
+    min-width: 24px;
+    padding: 4px;
+}
+.status-indicator.processing::before {
+    display: none;
+}
 .status-count {
     font-size: 12px;
     font-weight: 600;
@@ -284,7 +293,7 @@ body {
 .ws-node {
     position: absolute;
     cursor: grab;
-    transition: all 0.3s ease; /* Increased transition time for smoother animation */
+    transition: none; /* Force-directed layout handles animation via physics, not CSS */
     user-select: none;
     --node-color: #ffffff; /* Default fallback color */
 }
@@ -428,6 +437,233 @@ body {
     box-shadow: 0 0 20px rgba(74, 158, 255, 0.4) !important;
     border-color: var(--accent) !important;
     background: rgba(74, 158, 255, 0.15) !important;
+}
+
+/* ─── Graph nodes (force-directed layout) ─── */
+.graph-node {
+    position: absolute;
+    cursor: grab;
+    user-select: none;
+    --node-color: #ffffff; /* Default fallback color */
+    transition: none; /* Force-directed layout handles animation via physics, not CSS */
+}
+.graph-node:hover {
+    transform: scale(1.05);
+    z-index: 5;
+}
+.graph-node:active {
+    cursor: grabbing;
+}
+
+/* ─── File nodes (pills) ─── */
+.graph-node.file-node {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    background: var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    min-width: 120px;
+    max-width: 200px;
+}
+.graph-node.file-node:hover {
+    background: var(--glass-hover);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+.graph-node.file-node .node-label {
+    font-size: 12px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ─── Directory nodes (circles) ─── */
+.graph-node.dir-node {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+.graph-node.dir-node:hover {
+    background: var(--glass-hover);
+    border-color: var(--node-color);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+.graph-node.dir-node .node-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 100%;
+    gap: 2px;
+}
+.graph-node.dir-node .node-label {
+    font-size: 10px;
+    max-width: 100%;
+    text-align: center;
+    line-height: 1.1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text);
+    word-break: break-word;
+    white-space: normal;
+    text-wrap: wrap;
+}
+.graph-node.dir-node .expansion-indicator {
+    font-size: 8px;
+    font-weight: 600;
+    color: var(--text-dim);
+    line-height: 1;
+    margin-top: -2px;
+}
+
+/* ─── Group nodes (circles) ─── */
+.graph-node.group-node {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+.graph-node.group-node:hover {
+    background: var(--glass-hover);
+    border-color: var(--node-color);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+.graph-node.group-node .node-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 100%;
+    gap: 2px;
+}
+.graph-node.group-node .node-label {
+    font-size: 10px;
+    max-width: 100%;
+    text-align: center;
+    line-height: 1.1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text);
+    word-break: break-word;
+    white-space: normal;
+    text-wrap: wrap;
+}
+
+/* ─── Machine nodes (circles) ─── */
+.graph-node.machine-node {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+.graph-node.machine-node:hover {
+    background: var(--glass-hover);
+    border-color: var(--node-color);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+.graph-node.machine-node .node-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 100%;
+    gap: 2px;
+}
+.graph-node.machine-node .node-label {
+    font-size: 10px;
+    max-width: 100%;
+    text-align: center;
+    line-height: 1.1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text);
+    word-break: break-word;
+    white-space: normal;
+    text-wrap: wrap;
+}
+
+/* ─── Drive nodes (circles) ─── */
+.graph-node.drive-node {
+    width: 65px;
+    height: 65px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: var(--glass-strong);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+.graph-node.drive-node:hover {
+    background: var(--glass-hover);
+    border-color: var(--node-color);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+.graph-node.drive-node.disconnected {
+    opacity: 0.5;
+}
+.graph-node.drive-node .node-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 100%;
+    gap: 2px;
+}
+.graph-node.drive-node .node-label {
+    font-size: 10px;
+    max-width: 100%;
+    text-align: center;
+    line-height: 1.1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text);
+    word-break: break-word;
+    white-space: normal;
+    text-wrap: wrap;
+}
+
+/* ─── Selected nodes ─── */
+.graph-node.selected {
+    border-color: var(--accent) !important;
+    background: rgba(74, 158, 255, 0.1) !important;
+    box-shadow: 0 0 12px var(--accent-glow) !important;
+}
+
+/* ─── Node labels ─── */
+.node-label {
+    font-size: 12px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* ─── Nested nodes (contained by a parent path) ─── */
@@ -829,6 +1065,113 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 ::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.2);
+}
+
+/* ─── Notifications ─── */
+.notification-stack {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 8px;
+    z-index: 500;
+    pointer-events: none;
+    max-height: 50vh;
+    overflow: hidden;
+}
+
+/* ─── Notification progress and spinner ─── */
+.progress-bar-container {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 4px;
+}
+.progress-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.3s ease;
+    border-radius: 2px;
+}
+.spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-top: 2px solid var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-right: 8px;
+    align-self: center;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+.notification-toast {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    min-width: 240px;
+    max-width: 400px;
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    animation: notif-in 0.2s ease-out;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+.notification-toast:hover {
+    opacity: 0.85;
+}
+@keyframes notif-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.notif-info {
+    background: rgba(30, 33, 42, 0.92);
+    border: 1px solid var(--glass-border);
+}
+.notif-warning {
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.25);
+}
+.notif-error {
+    background: rgba(248, 113, 113, 0.1);
+    border: 1px solid rgba(248, 113, 113, 0.25);
+}
+.notif-message {
+    flex: 1;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.4;
+}
+.notif-warning .notif-message { color: var(--orange); }
+.notif-error .notif-message { color: var(--red); }
+.notif-close {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-muted);
+    border: none;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+}
+.notif-close:hover {
+    background: var(--glass-hover);
+    color: var(--text);
 }
 
 /* ─── Utility ─── */

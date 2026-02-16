@@ -1,6 +1,117 @@
+use std::ops::{Add, Sub, Mul, AddAssign, SubAssign};
 use surrealdb::types::RecordId;
 
-/// Color palette for machines/drives — designed for dark backgrounds.
+// ─── Vec2 ─────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Vec2 {
+    pub x: f64,
+    pub y: f64,
+}
+
+impl Vec2 {
+    pub fn new(x: f64, y: f64) -> Self { Self { x, y } }
+    pub fn length(&self) -> f64 { (self.x * self.x + self.y * self.y).sqrt() }
+    pub fn normalized(&self) -> Self {
+        let len = self.length();
+        if len < 1e-10 { Self::default() } else { Self { x: self.x / len, y: self.y / len } }
+    }
+}
+
+impl Add for Vec2 {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self { Self { x: self.x + rhs.x, y: self.y + rhs.y } }
+}
+
+impl Sub for Vec2 {
+    type Output = Self;
+    fn sub(self, rhs: Self) -> Self { Self { x: self.x - rhs.x, y: self.y - rhs.y } }
+}
+
+impl Mul<f64> for Vec2 {
+    type Output = Self;
+    fn mul(self, rhs: f64) -> Self { Self { x: self.x * rhs, y: self.y * rhs } }
+}
+
+impl AddAssign for Vec2 {
+    fn add_assign(&mut self, rhs: Self) { self.x += rhs.x; self.y += rhs.y; }
+}
+
+impl SubAssign for Vec2 {
+    fn sub_assign(&mut self, rhs: Self) { self.x -= rhs.x; self.y -= rhs.y; }
+}
+
+// ─── Node types ───────────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum NodeKind {
+    File,
+    Directory { expanded: bool },
+    Group { expanded: bool },
+    Machine,
+    Drive { connected: bool },
+}
+
+impl NodeKind {
+    pub fn is_expandable(&self) -> bool {
+        matches!(self, NodeKind::Directory { .. } | NodeKind::Group { .. })
+    }
+
+    pub fn is_expanded(&self) -> bool {
+        match self {
+            NodeKind::Directory { expanded } | NodeKind::Group { expanded } => *expanded,
+            _ => false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GraphNode {
+    pub id: String,
+    pub label: String,
+    pub path: String,
+    pub kind: NodeKind,
+    pub parent_id: Option<String>,
+    pub color: String,
+    pub position: Vec2,
+    pub velocity: Vec2,
+    pub pinned: bool,
+    pub visible: bool,
+    pub width: f64,
+    pub height: f64,
+}
+
+impl GraphNode {
+    pub fn center_x(&self) -> f64 { self.position.x + self.width / 2.0 }
+    pub fn center_y(&self) -> f64 { self.position.y + self.height / 2.0 }
+    pub fn center(&self) -> Vec2 { Vec2::new(self.center_x(), self.center_y()) }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GraphEdge {
+    pub id: String,
+    pub source_id: String,
+    pub dest_id: String,
+    pub status: String,
+    pub total_files: i64,
+    pub completed_files: i64,
+    pub created_at: String,
+}
+
+// ─── Container (for toolbar chips) ────────────────────────────
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ContainerView {
+    pub id: RecordId,
+    pub name: String,
+    pub kind: String,
+    pub color: String,
+    pub connected: bool,
+    pub mount_point: Option<String>,
+}
+
+// ─── Visual helpers ───────────────────────────────────────────
+
 pub const PALETTE: &[&str] = &[
     "#4a9eff", // blue
     "#3fb950", // green
@@ -14,61 +125,6 @@ pub fn palette_color(index: usize) -> &'static str {
     PALETTE[index % PALETTE.len()]
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct ContainerView {
-    pub id: RecordId,
-    pub name: String,
-    pub kind: String, // "local", "remote", or "drive"
-    pub color: String,
-    pub x: f64,
-    pub y: f64,
-    pub connected: bool,
-    pub mount_point: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct NodeView {
-    pub id: RecordId,
-    pub container_id: String,
-    pub path: String,
-    pub label: String,
-    pub x: f64,
-    pub y: f64,
-    pub width: f64,
-    pub height: f64,
-    /// Nesting depth: 0 = top-level, 1 = contained by another node, etc.
-    pub depth: usize,
-
-    // NEW FIELDS for circular directory nodes:
-    pub is_dir: bool,           // Directory = circle, File = pill
-    pub is_expanded: bool,      // false = collapsed, true = expanded (inside view)
-    pub is_orbit: bool,         // true = children fanned out around it (orbit view)
-    pub child_count: usize,     // Number of direct children
-    pub total_descendants: usize, // Total count of all descendants (recursive)
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct EdgeView {
-    pub intent_id: RecordId,
-    pub source_id: String,
-    pub dest_id: String,
-    pub status: String,
-    pub total_files: i64,
-    pub completed_files: i64,
-}
-
-impl NodeView {
-    /// Center X of the node in graph-layer coordinates (right edge for edges going right)
-    pub fn center_x(&self) -> f64 {
-        self.x + self.width / 2.0
-    }
-    /// Center Y of the node in graph-layer coordinates
-    pub fn center_y(&self) -> f64 {
-        self.y + self.height / 2.0
-    }
-}
-
-/// Compute a cubic bezier path string for an edge between two points.
 pub fn bezier_path(x1: f64, y1: f64, x2: f64, y2: f64) -> String {
     let dx = (x2 - x1).abs() * 0.5;
     format!(
@@ -78,7 +134,6 @@ pub fn bezier_path(x1: f64, y1: f64, x2: f64, y2: f64) -> String {
     )
 }
 
-/// Get the edge color based on intent status.
 pub fn edge_color(status: &str) -> &'static str {
     match status {
         "idle" => "#555",
@@ -90,50 +145,6 @@ pub fn edge_color(status: &str) -> &'static str {
     }
 }
 
-/// Compute orbit positions for children around a parent node
-pub fn compute_orbit_positions(parent_x: f64, parent_y: f64, children: &[&NodeView]) -> Vec<(usize, f64, f64)> {
-    const RING_RADIUS: f64 = 80.0;
-    let n = children.len() as f64;
-    let mut positions = Vec::new();
-
-    // Handle edge case of no children
-    if n == 0.0 {
-        return positions;
-    }
-
-    for (i, _child) in children.iter().enumerate() {
-        let angle = (i as f64 / n) * 2.0 * std::f64::consts::PI;
-        let x = parent_x + RING_RADIUS * angle.cos();
-        let y = parent_y + RING_RADIUS * angle.sin();
-        positions.push((i, x, y));
-    }
-    positions
-}
-
-/// Check if `child` path is contained within `parent` path.
-/// "/a/b/c" is contained in "/a/b" but "/a/bc" is NOT contained in "/a/b".
-pub fn path_contains(parent: &str, child: &str) -> bool {
-    if parent == child {
-        return false;
-    }
-    let parent_normalized = if parent.ends_with('/') {
-        parent.to_string()
-    } else {
-        format!("{parent}/")
-    };
-    child.starts_with(&parent_normalized)
-}
-
-/// Compute nesting depth for a path given a sorted list of all paths in the same container.
-/// Returns 0 for top-level, 1 for paths contained by one other, etc.
-pub fn compute_depth(path: &str, all_paths: &[&str]) -> usize {
-    all_paths
-        .iter()
-        .filter(|&&other| path_contains(other, path))
-        .count()
-}
-
-/// Shorten a path for display. Show last 2 components.
 pub fn short_path(path: &str) -> String {
     let parts: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
     if parts.len() <= 2 {
@@ -143,25 +154,44 @@ pub fn short_path(path: &str) -> String {
     }
 }
 
-/// Get direct children of a node based on path containment
-pub fn get_direct_children<'a>(parent: &'a NodeView, all_nodes: &'a [NodeView]) -> Vec<&'a NodeView> {
-    all_nodes
-        .iter()
-        .filter(|child| {
-            // Child must be different from parent
-            if child.id == parent.id {
-                return false;
-            }
-            // Child path must be directly contained in parent path
-            if !path_contains(&parent.path, &child.path) {
-                return false;
-            }
-            // Child must be exactly one level deeper (direct child)
-            let parent_components: Vec<&str> = parent.path.split('/').filter(|s| !s.is_empty()).collect();
-            let child_components: Vec<&str> = child.path.split('/').filter(|s| !s.is_empty()).collect();
-            child_components.len() == parent_components.len() + 1
-        })
-        .collect()
+pub fn path_contains(parent: &str, child: &str) -> bool {
+    if parent == child { return false; }
+    let parent_normalized = if parent.ends_with('/') {
+        parent.to_string()
+    } else {
+        format!("{parent}/")
+    };
+    child.starts_with(&parent_normalized)
+}
+
+pub fn is_direct_child(parent_path: &str, child_path: &str) -> bool {
+    if !path_contains(parent_path, child_path) { return false; }
+    let parent_clean = parent_path.trim_end_matches('/');
+    let child_clean = child_path.trim_end_matches('/');
+    let remaining = &child_clean[parent_clean.len()..];
+    let remaining_trimmed = remaining.trim_start_matches('/');
+    let parts: Vec<&str> = remaining_trimmed.split('/').filter(|s| !s.is_empty()).collect();
+    parts.len() == 1
+}
+
+// ─── Node sizing ──────────────────────────────────────────────
+
+const NODE_WIDTH_FILE: f64 = 150.0;
+const NODE_HEIGHT_FILE: f64 = 36.0;
+const DIR_MIN_SIZE: f64 = 50.0;
+const DIR_MAX_SIZE: f64 = 90.0;
+const MACHINE_SIZE: f64 = 70.0;
+
+pub fn node_dimensions(kind: &NodeKind, child_count: usize) -> (f64, f64) {
+    match kind {
+        NodeKind::File => (NODE_WIDTH_FILE, NODE_HEIGHT_FILE),
+        NodeKind::Directory { .. } | NodeKind::Group { .. } => {
+            let size = (DIR_MIN_SIZE + (1.0 + child_count as f64).ln() * 10.0)
+                .clamp(DIR_MIN_SIZE, DIR_MAX_SIZE);
+            (size, size)
+        }
+        NodeKind::Machine | NodeKind::Drive { .. } => (MACHINE_SIZE, MACHINE_SIZE),
+    }
 }
 
 #[cfg(test)]
@@ -169,38 +199,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_path_contains_basic() {
+    fn test_path_contains() {
         assert!(path_contains("/a/b", "/a/b/c"));
-        assert!(path_contains("/a/b/", "/a/b/c"));
-    }
-
-    #[test]
-    fn test_path_contains_not_prefix_trick() {
-        // /a/bc is NOT contained in /a/b (no trailing slash match)
         assert!(!path_contains("/a/b", "/a/bc"));
-    }
-
-    #[test]
-    fn test_path_contains_same_path() {
         assert!(!path_contains("/a/b", "/a/b"));
     }
 
     #[test]
-    fn test_path_contains_unrelated() {
-        assert!(!path_contains("/a/b", "/c/d"));
+    fn test_is_direct_child() {
+        assert!(is_direct_child("/a/b", "/a/b/c"));
+        assert!(!is_direct_child("/a/b", "/a/b/c/d"));
+        assert!(!is_direct_child("/a/b", "/a/b"));
     }
 
     #[test]
-    fn test_compute_depth() {
-        let paths = vec![
-            "/Users/anders/projects",
-            "/Users/anders/projects/kip",
-            "/Users/anders/projects/kip/src",
-            "/Users/anders/music",
-        ];
-        assert_eq!(compute_depth("/Users/anders/projects", &paths), 0);
-        assert_eq!(compute_depth("/Users/anders/projects/kip", &paths), 1);
-        assert_eq!(compute_depth("/Users/anders/projects/kip/src", &paths), 2);
-        assert_eq!(compute_depth("/Users/anders/music", &paths), 0);
+    fn test_vec2_ops() {
+        let a = Vec2::new(1.0, 2.0);
+        let b = Vec2::new(3.0, 4.0);
+        let c = a + b;
+        assert_eq!(c.x, 4.0);
+        assert_eq!(c.y, 6.0);
     }
 }

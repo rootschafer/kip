@@ -113,7 +113,7 @@ async fn discover_mounted_volumes() -> Vec<VolumeInfo> {
                 volumes.push(VolumeInfo {
                     uuid,
                     name: info.volume_name.unwrap_or_else(|| "Untitled".into()),
-                    mount_point: info.mount_point.unwrap_or(path_str),
+                    mount_point: info.mount_point.unwrap_or(path_str.clone()),
                     filesystem: info.filesystem_type.unwrap_or_default(),
                     capacity_bytes: info.total_size.unwrap_or(0),
                 });

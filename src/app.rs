@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 use crate::db::DbHandle;
 use crate::ui::file_picker::{FilePickerLayer, PickerManager};
 use crate::ui::graph::MappingGraph;
+use crate::ui::notification::{NotificationLayer, NotificationService};
 use crate::ui::review_queue::ReviewQueue;
 
 const MAIN_CSS: Asset = asset!("/assets/main.css");
@@ -32,21 +33,18 @@ pub fn DbErrorApp() -> Element {
 
 #[component]
 pub fn App() -> Element {
-    let db = use_context::<DbHandle>();
+    // let db = use_context::<DbHandle>();
+    // let db = use_signal(|| DbHandle::new());
     let picker = use_store(|| PickerManager::new());
-    let hostname = use_signal(|| String::from("..."));
+    let notifs = use_store(|| NotificationService::new());
+    let mut hostname = use_signal(|| String::from("..."));
     let mut refresh_tick = use_signal(|| 0u32);
-
-    let db_for_hostname = db.clone();
-    let db_for_watcher = db.clone();
 
     // Load hostname once
     use_effect(move || {
-        let db = db_for_hostname.clone();
-        let mut hostname = hostname;
         spawn(async move {
-            let mut response = db
-                .db
+            let db = use_context::<DbHandle>();
+            let mut response = db.db
                 .query("SELECT name FROM machine:local")
                 .await
                 .unwrap();
@@ -59,14 +57,25 @@ pub fn App() -> Element {
 
     // Start drive watcher (polls /Volumes/ every 5s)
     use_effect(move || {
-        let db = db_for_watcher.clone();
         spawn(async move {
+            let db = use_context::<DbHandle>();
             let _watcher = crate::devices::DriveWatcher::start(db);
             std::future::pending::<()>().await;
         });
     });
 
-    // Poll for updates every 2 seconds
+    // // Poll for updates every 2 seconds
+    // use_effect(move || {
+    //     spawn(async move {
+    //         loop {
+    //             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    //             // Only increment refresh tick if it's not already being refreshed
+    //             *refresh_tick.write() += 1;
+    //         }
+    //     });
+    // });
+
+    // Poll for updates every 2 seconds - use use_effect so it only runs once
     use_effect(move || {
         spawn(async move {
             loop {
@@ -83,19 +92,15 @@ pub fn App() -> Element {
     rsx! {
 		document::Stylesheet { href: MAIN_CSS }
 		div { class: "app",
-			// div { class: "header",
-			//     h1 { "Kip" }
-			//     div { class: "header-right",
-			//         span { class: "host", "{hostname}" }
-			//     }
-			// }
 			MappingGraph {
 				picker,
 				refresh_tick: refresh_tick(),
 				on_changed: on_refresh,
+				notifs,
 			}
 			FilePickerLayer { picker, on_location_added: on_refresh }
 			ReviewQueue { refresh_tick: refresh_tick(), on_resolved: on_refresh }
+			NotificationLayer { notifs }
 		}
 	}
 }

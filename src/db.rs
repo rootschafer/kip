@@ -48,7 +48,8 @@ async fn run_migrations(db: &Surreal<Db>) -> Result<(), Box<dyn std::error::Erro
 /// Create/update the "this machine" record on every launch.
 async fn bootstrap_local_machine(db: &Surreal<Db>) -> Result<(), Box<dyn std::error::Error>> {
     let hostname = get_hostname();
-    db.query(
+    tracing::info!("Bootstrapping local machine with hostname: {}", hostname);
+    let mut resp = db.query(
         "UPSERT machine:local CONTENT {
             name: $name,
             kind: 'local',
@@ -60,8 +61,13 @@ async fn bootstrap_local_machine(db: &Surreal<Db>) -> Result<(), Box<dyn std::er
     )
     .bind(("name", hostname.clone()))
     .bind(("hostname", hostname))
-    .await?
-    .check()?;
+    .await
+    .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+    
+    resp.check()
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+    
+    tracing::info!("Successfully bootstrapped local machine");
     Ok(())
 }
 
