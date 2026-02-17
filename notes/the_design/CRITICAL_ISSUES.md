@@ -1,18 +1,18 @@
 # Critical Issues & Known Bugs
 
-**Last Updated:** Current Session
+**Last Updated:** February 17, 2026
 
 ---
 
-## Resolved Issues
+## RESOLVED - Critical Issues
 
 ### ✅ Infinite Loop #1 - Spawns in Component Body
-**Severity:** Critical (caused app freeze + 209GB log file)
+**Severity:** Critical (caused app freeze + 209GB log file)  
 **Status:** FIXED
 
 **Problem:**
 ```rust
-// In src/app.rs - component body
+// In component body - creates new spawn on EVERY render
 spawn(async move {
     loop {
         tokio::time::sleep(Duration::from_secs(2)).await;
@@ -21,21 +21,11 @@ spawn(async move {
 });
 ```
 
-Every component re-render created a NEW spawn, multiplying the polling loops. All loops incremented `refresh_tick` simultaneously, causing:
-- Resource re-runs
-- State updates
-- More re-renders
-- More spawns
-- INFINITE LOOP
-
 **Fix:**
 ```rust
 use_effect(move || {
     spawn(async move {
-        loop {
-            tokio::time::sleep(Duration::from_secs(2)).await;
-            *refresh_tick.write() += 1;
-        }
+        loop { /* ... */ }
     });
 });
 ```
@@ -44,11 +34,12 @@ use_effect(move || {
 - Polling loop (refresh_tick)
 - Hostname fetch
 - Drive watcher
+- Simulation loop
 
 ---
 
 ### ✅ Infinite Loop #2 - Resource Updating Signals
-**Severity:** Critical
+**Severity:** Critical  
 **Status:** FIXED
 
 **Problem:**
@@ -56,21 +47,14 @@ use_effect(move || {
 use_resource(move || {
     let graph_val = graph.clone();
     async move {
-        let data = load_data().await;
         graph_val.with_mut(|g| g.load(data)); // Triggers re-render!
     }
 });
 ```
 
-Resource captures `graph` signal, updates it inside async block. Update triggers component re-render, which recreates the resource closure, which runs again, which updates graph again... INFINITE LOOP.
-
 **Fix:**
 ```rust
-let loaded_data = use_resource(move || {
-    let _tick = refresh_tick;
-    async move { load_data().await.ok() }
-});
-
+let loaded_data = use_resource(move || async move { load().await.ok() });
 use_effect(move || {
     if let Some(Some(data)) = loaded_data.read().as_ref() {
         graph.with_mut(|g| g.load(data));
@@ -78,28 +62,24 @@ use_effect(move || {
 });
 ```
 
-Separate resource (loads data) from effect (updates state). Effect only runs when resource completes.
-
 ---
 
-### ✅ Infinite Loop #3 - Signal Capture in Closures
-**Severity:** High
+### ✅ Infinite Loop #3 - Signal vs Value Capture
+**Severity:** High  
 **Status:** FIXED
 
 **Problem:**
 ```rust
 use_resource(move || {
-    let tick = refresh_tick; // Captures Signal<u32>, not u32 value!
+    let tick = refresh_tick; // Captures Signal<u32>
     async move { /* ... */ }
 });
 ```
 
-Capturing the Signal instead of its value means the closure changes on every render, triggering the resource to re-run.
-
 **Fix:**
 ```rust
 use_resource(move || {
-    let tick = refresh_tick; // tick is u32 (the VALUE)
+    let tick = refresh_tick; // tick is u32 VALUE
     async move {
         let _ = tick; // Use the value
         /* ... */
@@ -110,23 +90,11 @@ use_resource(move || {
 ---
 
 ### ✅ Disk Space Exhaustion - File Logging
-**Severity:** Critical (filled entire disk with 209GB log file)
+**Severity:** Critical (209GB log file)  
 **Status:** FIXED
 
-**Problem:**
+**Fix in `src/main.rs`:**
 ```rust
-// In src/main.rs
-let file_appender = tracing_appender::rolling::never(log_dir, "kip.log");
-tracing_subscriber::registry()
-    .with(tracing_subscriber::fmt::layer().with_writer(file_appender))
-    .init();
-```
-
-Combined with infinite loop logging, this created a 209GB log file.
-
-**Fix:**
-```rust
-// Console only, WARN level
 tracing_subscriber::fmt()
     .with_max_level(tracing::Level::WARN)
     .init();
@@ -134,249 +102,255 @@ tracing_subscriber::fmt()
 
 ---
 
-### ✅ DbHandle Move Errors
-**Severity:** Medium (compile errors)
+### ✅ Simulation Loop Not Restarting
+**Severity:** High (nodes appeared but didn't move)  
 **Status:** FIXED
 
-**Problem:**
+**Problem:** Simulation loop would `break` when alpha dropped, then not restart when new nodes added.
+
+**Fix:** Loop never breaks, just resets tick_count and waits for sim_running:
 ```rust
-let db = use_context::<DbHandle>();
-
-use_resource(move || {
-    let db_val = db.clone(); // db moved here
-    async move { /* ... */ }
-});
-
-// Later...
-rsx! {
-    button {
-        onclick: move |_| {
-            let db = db.clone(); // ERROR: db already moved!
-        }
-    }
+if !should_continue {
+    tracing::info!("Simulation loop: tick {} stopped, will restart if needed", tick_count);
+    tick_count = 0;  // Reset, don't break!
 }
 ```
 
-**Fix:**
+---
+
+### ✅ Viewport Transform Missing
+**Severity:** Medium (edge preview misaligned)  
+**Status:** FIXED
+
+**Problem:** Rubber band line didn't account for viewport transform.
+
+**Fix in `graph_edges.rs`:**
 ```rust
-let db = use_context::<DbHandle>();
-let db_for_resource = db.clone(); // Pre-clone for resource
-
-use_resource(move || {
-    let db_val = db_for_resource.clone();
-    async move { /* ... */ }
-});
-
-// db is still available for other uses
+let graph_mouse_x = (mouse_x - viewport_x) / viewport_scale;
+let graph_mouse_y = (mouse_y - viewport_y) / viewport_scale;
 ```
 
 ---
 
-## Current Issues
+### ✅ Cluster Attraction
+**Severity:** Medium (nodes from different machines clumped)  
+**Status:** FIXED
 
-### ⚠️ Force-Directed Graph Not Working
-**Severity:** High
-**Status:** NEEDS IMPLEMENTATION
+**Problem:** Repulsion too weak, center gravity too strong.
 
-**Symptom:**
-- Nodes render in static grid layout
-- No physics simulation
-- Nodes don't respond to drag
-- No automatic layout
-
-**Cause:**
-Simulation loop disabled to prevent infinite loops. Physics constants defined but not used.
-
-**Location:**
-- `src/ui/graph_store.rs` - Physics constants, `tick()` method
-- `src/ui/graph.rs` - Simulation loop (commented out)
-
-**Reference:**
-See `external/nexus-node-sync/components/GraphCanvas.tsx` for D3 implementation.
-
-**Next Steps:**
-1. Implement proper simulation loop with start/stop control
-2. Ensure loop doesn't capture signals incorrectly
-3. Test with small node count first (5-10 nodes)
-4. Gradually increase to verify performance
+**Fix - Tuned constants in `graph_store.rs`:**
+```rust
+REPULSION: 2000.0      // Was 300-800, increased for separation
+SPRING_K: 0.03         // Was 0.05-0.1, reduced tension
+CENTER_GRAVITY: 0.003  // Was 0.02-0.04, very weak now
+```
 
 ---
 
-### ⚠️ Directory Expansion Not Visual
-**Severity:** Medium
-**Status:** PARTIALLY IMPLEMENTED
+## CURRENT ISSUES
+
+### ⚠️ Zoom Not Working
+**Severity:** Medium  
+**Status:** BLOCKED - Dioxus API incompatibility
 
 **Symptom:**
-- `toggle_expand()` exists in Graph struct
-- `wake()` method exists to start simulation
-- But no visual expansion occurs
+- Scroll wheel does nothing
+- Various API attempts fail (`delta_y()`, field access, enum match)
 
-**Cause:**
-- Simulation not running
-- Orbit positioning not implemented
-- Node rendering doesn't check `is_expanded` state
+**Location:** `src/ui/graph.rs` - wheel handler removed
 
-**Location:**
-- `src/ui/graph_store.rs` - `toggle_expand()`, `wake()`
-- `src/ui/graph_nodes.rs` - Node rendering
+**Attempts:**
+```rust
+// All failed:
+e.delta_y()           // Method doesn't exist
+e.data().delta_y()    // Method doesn't exist
+e.data().y            // Field doesn't exist
+e.data().delta        // Returns WheelDelta enum
+match e.data().delta { /* variants not accessible */ }
+```
 
-**Reference:**
-See `external/nexus-node-sync/App.tsx` - `handleNodeClick()` expansion logic.
+**Workaround:** Alt+drag pan works fine
+
+**Fix Needed:**
+- Find correct Dioxus wheel event API for version 0.7.3
+- Or add zoom buttons (+/-)
+- Or implement keyboard zoom (Ctrl+scroll, +/-)
+
+---
+
+### ⚠️ Directory Expansion Incomplete
+**Severity:** Medium  
+**Status:** PARTIAL
+
+**What Works:**
+- `toggle_expand()` sets expanded state
+- Finds children by parent_id
+- Works for machine/drive nodes (filesystem scan)
+
+**What Doesn't:**
+- Directory nodes from DB don't trigger filesystem scan
+- Only machines/drives scan filesystem
+- Clicking a directory node does nothing if no children in DB
+
+**Location:** `src/ui/graph.rs` - expansion handler
+
+**Fix Needed:**
+Extend scan logic to Directory nodes:
+```rust
+if is_directory && !has_children_in_db {
+    scan_filesystem_directory(path);
+}
+```
 
 ---
 
 ### ⚠️ Edge Creation Incomplete
-**Severity:** Medium
-**Status:** PARTIALLY IMPLEMENTED
+**Severity:** Medium  
+**Status:** PARTIAL
 
-**Symptom:**
-- Drag state tracks edge creation
-- But no visual edge preview
-- Edge doesn't complete on drop
+**What Works:**
+- Ctrl/Alt+click starts edge creation
+- Rubber band line follows cursor
+- DragState::CreatingEdge tracks state
+
+**What Doesn't:**
+- Dropping on target node does nothing
 - No intent created in database
+- No edge added to graph
 
-**Cause:**
-- SVG edge preview not implemented
-- Mouse up handler incomplete
-- Database creation missing
+**Location:** `src/ui/graph.rs` - onmouseup handler
 
-**Location:**
-- `src/ui/graph.rs` - Mouse event handlers
-- `src/ui/graph_edges.rs` - SVG overlay
-
-**Reference:**
-See `external/nexus-node-sync/App.tsx` - `linkMode` and edge creation.
-
----
-
-## Common Pitfalls (DO NOT REPEAT)
-
-### 1. Spawns in Component Body
+**Fix Needed:**
 ```rust
-// ❌ NEVER DO THIS
-#[component]
-fn MyComponent() -> Element {
-    spawn(async move { /* ... */ }); // Runs on EVERY render!
-    rsx! { /* ... */ }
+// In node mousedown handler during CreatingEdge state:
+if let DragState::CreatingEdge { source_id } = &drag_state {
+    create_edge_in_db(&db, source_id, &target_id).await;
+    graph.with_mut(|g| g.add_edge(new_edge));
 }
-
-// ✅ CORRECT
-#[component]
-fn MyComponent() -> Element {
-    use_effect(move || {
-        spawn(async move { /* ... */ }); // Runs ONCE
-    });
-    rsx! { /* ... */ }
-}
-```
-
-### 2. Updating Signals in Resources
-```rust
-// ❌ NEVER DO THIS
-use_resource(move || {
-    let signal_val = signal.clone();
-    async move {
-        let data = load().await;
-        signal_val.write().update(data); // Triggers re-render!
-    }
-});
-
-// ✅ CORRECT
-let data = use_resource(move || async move { load().await });
-use_effect(move || {
-    if let Some(d) = data.read().as_ref() {
-        signal.write().update(d);
-    }
-});
-```
-
-### 3. Excessive Logging
-```rust
-// ❌ NEVER DO THIS
-info!("Loading..."); // In a loop = GBs of logs
-debug!("Tick: {}", count); // Every frame = millions of lines
-
-// ✅ CORRECT
-trace!("Tick: {}", count); // Only shows with trace level
-// Or better, don't log in tight loops at all
-```
-
-### 4. Signal vs Value Capture
-```rust
-// ❌ WRONG
-use_resource(move || {
-    let x = my_signal; // x is Signal<T>
-    async move { /* ... */ }
-});
-
-// ✅ CORRECT
-use_resource(move || {
-    let x = my_signal(); // x is T (the value)
-    async move { /* ... */ }
-});
 ```
 
 ---
 
-## Debugging Tips
+### ⚠️ Lasso Multi-Drag Missing
+**Severity:** Low  
+**Status:** NOT IMPLEMENTED
+
+**What Works:**
+- Shift+drag creates selection rectangle
+- Nodes selected in rect
+
+**What Doesn't:**
+- Selected nodes don't move together
+- Can only drag one node at a time
+
+**Location:** `src/ui/graph.rs` - DragState::Dragging handler
+
+**Fix Needed:**
+Track all selected nodes and apply same offset to each.
+
+---
+
+## ARCHITECTURAL ISSUES
+
+### ⚠️ Filesystem Scan Coupling
+**Severity:** Low  
+**Status:** DESIGN DECISION
+
+**Current:** `scan_directory()` creates nodes directly, called from UI
+
+**Better Pattern:** 
+- Scan service returns node data
+- Graph state updated via action/reducer pattern
+- Separation of concerns
+
+**Why Not Fixed:** Works correctly, refactor can wait
+
+---
+
+### ⚠️ Graph State Monolith
+**Severity:** Low  
+**Status:** ACCEPTABLE
+
+**Current:** All graph state in single `Graph` struct
+
+**Better Pattern:**
+- Separate signals for nodes, edges, viewport, drag_state
+- More granular reactivity
+
+**Why Not Fixed:** Single signal is simpler, performance is fine
+
+---
+
+### ⚠️ CSS Hardcoded Values
+**Severity:** Low  
+**Status:** TECHNICAL DEBT
+
+**Example:**
+```css
+.header { padding: 16px 24px; }  /* Hardcoded */
+.workspace-svg { z-index: 1; }   /* Magic number */
+```
+
+**Better:** CSS custom properties for theme values
+
+**Why Not Fixed:** Visual polish, not blocking
+
+---
+
+## DEBUGGING PATTERNS
 
 ### Detecting Infinite Loops
 
-1. **Watch CPU usage** - Spikes to 100% immediately
-2. **Watch log file size** - Grows rapidly (GBs per minute)
-3. **Add counter logging:**
+1. **CPU spike** - Immediately goes to 100%
+2. **Log file growth** - `ls -lh ~/Library/Application\ Support/Kip/kip.log`
+3. **Counter logging:**
    ```rust
    static COUNTER: AtomicUsize = AtomicUsize::new(0);
    let count = COUNTER.fetch_add(1, Ordering::Relaxed);
-   eprintln!("Render count: {}", count); // Should stabilize
+   if count % 100 == 0 { tracing::info!("Render {}", count); }
    ```
 
 ### Finding Signal Loops
 
-1. **Check what triggers re-render:**
+1. Check what triggers re-render:
    - Signal read in component body?
    - Signal updated in resource/effect?
    - Does update trigger same signal again?
 
-2. **Use `use_effect` dependencies:**
+2. Use `use_effect` to track changes:
    ```rust
    use_effect(move || {
-       // This runs when `value` changes
        let v = my_signal();
-       println!("Changed to: {}", v);
+       tracing::info!("Changed to: {}", v);
    });
    ```
 
-### Performance Issues
+### Viewport Issues
 
-1. **Count re-renders:**
-   ```rust
-   static COUNT: AtomicUsize = AtomicUsize::new(0);
-   let c = COUNT.fetch_add(1, Ordering::Relaxed);
-   if c % 100 == 0 { eprintln!("{} renders", c); }
-   ```
+If nodes don't align with mouse:
+```rust
+// Always transform:
+let graph_x = (mouse_x - viewport_x) / viewport_scale;
+let graph_y = (mouse_y - viewport_y) / viewport_scale;
+```
 
-2. **Check for unnecessary clones:**
-   - Cloning large data structures in render
-   - Cloning in loops
+### Force Tuning
 
-3. **Profile with `tokio-console`:**
-   ```bash
-   cargo install tokio-console
-   # Add tokio-console feature to Cargo.toml
-   # Run app, then: tokio-console
-   ```
+If clusters clump together:
+- Increase REPULSION (currently 2000)
+- Decrease CENTER_GRAVITY (currently 0.003)
+- Increase edge lengths (currently 180-250px)
 
 ---
 
-## Emergency Recovery
+## EMERGENCY RECOVERY
 
 ### If App Freezes
 
-1. **Kill the process:** `Ctrl+C` or `killall kip`
-2. **Check log file:** `ls -lh ~/Library/Application\ Support/Kip/kip.log`
-3. **Delete log if huge:** `rm ~/Library/Application\ Support/Kip/kip.log`
-4. **Check disk space:** `df -h /`
+1. **Kill:** `Ctrl+C` or `killall kip`
+2. **Check log:** `ls -lh ~/Library/Application\ Support/Kip/kip.log`
+3. **Delete if huge:** `rm ~/Library/Application\ Support/Kip/kip.log`
+4. **Check disk:** `df -h /`
 5. **Clean build:** `rm -rf target && dx build`
 
 ### If Disk Is Full
@@ -385,19 +359,42 @@ use_resource(move || {
    ```bash
    du -ah / | sort -rh | head -20
    ```
-2. **Delete target directory:** `rm -rf /Users/anders/kip/target`
-3. **Delete log files:** `rm -rf /Users/anders/kip/*.log`
+2. **Delete target:** `rm -rf /Users/anders/kip/target`
+3. **Delete logs:** `rm -rf /Users/anders/kip/*.log`
 4. **Empty trash**
 
 ---
 
-## Contact / Escalation
+## CONTACT / ESCALATION
 
 If you encounter a new critical issue:
 
-1. **Document it immediately** in this file
+1. **Document immediately** in this file
 2. **Add reproduction steps**
 3. **Add fix if found**
-4. **Update START_HERE.md** if it's a common pitfall
+4. **Update START_HERE.md** if it's a common pattern
 
-**DO NOT** leave critical issues undocumented - the next AI will hit the same problem.
+**DO NOT** leave issues undocumented - the next developer WILL hit the same problem.
+
+### Template for New Issues
+
+```markdown
+### ⚠️ [Issue Name]
+**Severity:** [Critical/High/Medium/Low]  
+**Status:** [NEW/INVESTIGATING/FIXED]
+
+**Symptom:**
+[What you see]
+
+**Cause:**
+[Root cause if known]
+
+**Location:**
+[File and line numbers]
+
+**Fix:**
+[Solution if found]
+
+**Reference:**
+[Related files or patterns]
+```

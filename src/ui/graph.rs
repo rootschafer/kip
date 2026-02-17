@@ -215,10 +215,16 @@ pub fn MappingGraph(
 				// Zoom/pan handled via Alt+drag for now
 				onmousedown: move |e: MouseEvent| {
 				    let (x, y) = get_workspace_coords(&e);
-				    // Alt+drag for panning
+				    // Start panning on workspace click (Alt+click or middle click)
 				    if e.data().modifiers().alt() {
+				        let (vp_x, vp_y) = graph.with(|g| (g.viewport_x, g.viewport_y));
 				        graph.with_mut(|g| {
-				            g.drag_state = crate::ui::graph_store::DragState::Panning { start_x: x, start_y: y };
+				            g.drag_state = crate::ui::graph_store::DragState::Panning { 
+				                start_x: x, 
+				                start_y: y,
+				                start_viewport_x: vp_x,
+				                start_viewport_y: vp_y,
+				            };
 				        });
 				    } else if e.data().modifiers().shift() {
 				        graph
@@ -241,11 +247,11 @@ pub fn MappingGraph(
 				    let (x, y) = get_workspace_coords(&e);
 				    let drag_state_snapshot = graph().drag_state.clone();
 
-				    // Handle panning
-				    if let crate::ui::graph_store::DragState::Panning { start_x, start_y } = &drag_state_snapshot {
+				    // Handle panning - 1:1 with mouse movement
+				    if let crate::ui::graph_store::DragState::Panning { start_x, start_y, start_viewport_x, start_viewport_y } = &drag_state_snapshot {
 				        let dx = x - start_x;
 				        let dy = y - start_y;
-				        graph.with_mut(|g| g.pan(dx, dy));
+				        graph.with_mut(|g| g.set_viewport(start_viewport_x + dx, start_viewport_y + dy));
 				        return;
 				    }
 
@@ -513,7 +519,14 @@ pub fn MappingGraph(
 					rsx! {
 						div {
 							style: "transform: translate({x}px, {y}px) scale({scale}); transform-origin: 0 0; width: 100%; height: 100%;",
-							GraphSvgOverlay { graph, canvas_width: 2000.0, canvas_height: 2000.0 }
+							GraphSvgOverlay { 
+								graph, 
+								canvas_width: 2000.0, 
+								canvas_height: 2000.0,
+								viewport_scale: scale,
+								viewport_x: x,
+								viewport_y: y,
+							}
 							// Render visible nodes with viewport
 							for node in graph().visible_nodes().iter() {
 								GraphNodeComponent { graph, node: (*node).clone() }

@@ -9,7 +9,14 @@ use crate::ui::{
 // SVG overlay for rendering edges, cluster backgrounds, rubber band, and lasso
 
 #[component]
-pub fn GraphSvgOverlay(graph: Signal<Graph>, canvas_width: f64, canvas_height: f64) -> Element {
+pub fn GraphSvgOverlay(
+	graph: Signal<Graph>,
+	canvas_width: f64,
+	canvas_height: f64,
+	viewport_scale: f64,
+	viewport_x: f64,
+	viewport_y: f64,
+) -> Element {
 	let graph_snapshot = graph();
 	let visible_edges = graph_snapshot.visible_edges();
 	let node_positions: Vec<(String, f64, f64)> = graph_snapshot
@@ -45,6 +52,15 @@ pub fn GraphSvgOverlay(graph: Signal<Graph>, canvas_width: f64, canvas_height: f
 
 	// Capture drag state for the rubber band
 	let drag_state_snapshot = &graph_snapshot.drag_state;
+
+	// Pre-compute rubber-band line coordinates (transform mouse coords to graph space)
+	let rubber_band_line = if let DragState::CreatingEdge { source_x, source_y, mouse_x, mouse_y, .. } = &drag_state_snapshot {
+		let graph_mouse_x = (mouse_x - viewport_x) / viewport_scale;
+		let graph_mouse_y = (mouse_y - viewport_y) / viewport_scale;
+		Some((source_x, source_y, graph_mouse_x, graph_mouse_y))
+	} else {
+		None
+	};
 
 	rsx! {
 		svg {
@@ -97,12 +113,12 @@ pub fn GraphSvgOverlay(graph: Signal<Graph>, canvas_width: f64, canvas_height: f
 			}
 
 			// Rubber-band line during edge creation
-			if let DragState::CreatingEdge { source_x, source_y, mouse_x, mouse_y, .. } = drag_state_snapshot {
+			if let Some((sx, sy, mx, my)) = rubber_band_line {
 				line {
-					x1: "{source_x}",
-					y1: "{source_y}",
-					x2: "{mouse_x}",
-					y2: "{mouse_y}",
+					x1: "{sx}",
+					y1: "{sy}",
+					x2: "{mx}",
+					y2: "{my}",
 					stroke: "#4a9eff",
 					stroke_width: "2",
 					stroke_dasharray: "6 4",

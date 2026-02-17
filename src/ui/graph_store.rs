@@ -7,30 +7,29 @@ use crate::{db::DbHandle, ui::graph_types::*};
 
 // ─── Force simulation constants ───────────────────────────────
 
-// D3 force equivalents - strengthened for better layout
-const REPULSION: f64 = 800.0; // forceManyBody strength (increased from 300)
-const SPRING_K: f64 = 0.1; // Link force strength (increased from 0.02)
-const CENTER_GRAVITY: f64 = 0.02; // forceX/forceY strength (reduced - let repulsion dominate)
-const DAMPING: f64 = 0.85; // Velocity damping per tick (reduced from 0.9 - less damping)
-const ALPHA_DECAY: f64 = 0.95; // Alpha decay rate (reduced from 0.99 - lasts longer)
+// D3 force equivalents - tuned for cluster separation
+const REPULSION: f64 = 2000.0; // forceManyBody strength (increased for better separation)
+const SPRING_K: f64 = 0.03; // Link force strength (reduced - less tension)
+const CENTER_GRAVITY: f64 = 0.003; // forceX/forceY strength (very weak - clusters stay separate)
+const DAMPING: f64 = 0.85; // Velocity damping per tick
+const ALPHA_DECAY: f64 = 0.97; // Alpha decay rate (slower decay = more movement)
 const ALPHA_MIN: f64 = 0.001; // Stop threshold
 const ALPHA_START: f64 = 0.5; // Initial alpha on wake
-const WARM_RESTART: f64 = 0.5; // Alpha boost on changes (increased from 0.3)
+const WARM_RESTART: f64 = 0.8; // Alpha boost on changes
 
 // Collision settings
-const COLLISION_ITERATIONS: usize = 3; // Increased from 2 for better separation
-const COLLISION_K: f64 = 0.7; // Collision force strength
+const COLLISION_ITERATIONS: usize = 3;
+const COLLISION_K: f64 = 0.7;
 
 // ─── Helper functions for edge lengths and collision radii ────
 
 /// Get target edge length based on edge type
 fn get_edge_length(_edge: &GraphEdge) -> f64 {
-	// Note: GraphEdge doesn't have a type field yet, default to sync length
-	// For now, use status as a proxy; in future, add explicit edge type
+	// Increased lengths for better spacing
 	match _edge.status.as_str() {
-		"sync" | "active" | "idle" | "complete" => 150.0,
-		"group" => 60.0,
-		_ => 80.0, // hierarchy default
+		"sync" | "active" | "idle" | "complete" => 250.0, // was 200
+		"group" => 120.0, // was 100
+		_ => 180.0, // hierarchy default, was 150
 	}
 }
 
@@ -76,6 +75,8 @@ pub enum DragState {
 	Panning {
 		start_x: f64,
 		start_y: f64,
+		start_viewport_x: f64,
+		start_viewport_y: f64,
 	},
 }
 
@@ -332,10 +333,10 @@ impl Graph {
 		self.viewport_scale = new_scale;
 	}
 
-	/// Pan the viewport
-	pub fn pan(&mut self, dx: f64, dy: f64) {
-		self.viewport_x += dx;
-		self.viewport_y += dy;
+	/// Pan the viewport to a specific position
+	pub fn set_viewport(&mut self, x: f64, y: f64) {
+		self.viewport_x = x;
+		self.viewport_y = y;
 	}
 
 	pub fn set_position(&mut self, id: &str, x: f64, y: f64) {
@@ -1107,7 +1108,7 @@ pub async fn scan_directory(
 	}
 
 	// Position nodes in an orbit around the parent
-	let orbit_radius = 200.0;
+	let orbit_radius = 300.0; // Increased from 200 for better initial spacing
 	let total = entry_list.len() as f64;
 	
 	for (i, entry) in entry_list.into_iter().enumerate() {

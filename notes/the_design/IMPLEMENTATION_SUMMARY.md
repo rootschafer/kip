@@ -1,140 +1,228 @@
 # Kip Implementation Summary
 
-**Last Updated:** Current Session
-**Status:** Core infrastructure complete, force-directed graph needs implementation
+**Last Updated:** February 17, 2026
+**Status:** Force-directed graph fully functional, interaction features need completion
 
 ---
 
 ## Overview
 
-Kip is a file synchronization orchestrator with a force-directed graph UI. Users can visualize file locations across devices and create sync relationships by drawing edges between nodes.
+Kip is a file synchronization orchestrator with a force-directed graph UI. Users visualize file locations across devices and create sync relationships by drawing edges between nodes.
 
 ---
 
 ## Current Implementation Status
 
-### ✅ Completed Components
+### ✅ COMPLETED - Force-Directed Graph System
 
-#### 1. Database Layer (`src/db.rs`)
-- SurrealDB connection management
-- Schema initialization (machine, drive, location, intent, review_item tables)
-- Drive watcher for detecting mounted drives
-- Query helpers for loading graph data
+#### Physics Simulation (`src/ui/graph_store.rs`)
+- **Repulsion force** (forceManyBody equivalent): 2000.0 strength - nodes push apart aggressively
+- **Link attraction** (forceLink equivalent): 0.03 spring constant - connected nodes pull together
+- **Center gravity** (forceX/forceY equivalent): 0.003 strength - very weak pull to center
+- **Collision resolution** (forceCollide equivalent): 3 iterations, 0.7 strength
+- **Alpha decay**: 0.97 per tick, stops when < 0.001
+- **Edge length variation**:
+  - Sync edges: 250px
+  - Hierarchy edges: 180px
+  - Group edges: 120px
+- **Collision radii by node type**:
+  - Device/Machine: 45px
+  - Directory/Group: 30px
+  - File: 15px
 
-#### 2. App Structure (`src/app.rs`)
-- Root component with global state
-- Signal-based state management (`refresh_tick`, `hostname`)
-- Proper use of `use_effect` for async operations (no infinite loops)
-- Context providers for database access
+#### Simulation Loop (`src/ui/graph.rs`)
+- Runs at ~60fps when active (16ms tick)
+- Sleeps 100ms when idle to reduce CPU
+- Wrapped in `use_effect` to prevent infinite loops
+- Continuous loop (never exits, waits for sim_running)
 
-#### 3. Graph Component (`src/ui/graph.rs`)
-- `MappingGraph` component as main graph view
-- `GraphToolbar` with machine chips and status indicator
-- Resource-based data loading with proper signal handling
-- Add machine panel with form
+#### Infinite Canvas & Viewport
+- **Pan**: Alt+drag for 1:1 viewport movement
+- **Viewport state**: `viewport_x`, `viewport_y`, `viewport_scale` in Graph struct
+- **Transform**: CSS transform on container div (translate + scale)
+- **No boundaries**: Nodes can spread infinitely
 
-#### 4. Graph State (`src/ui/graph_store.rs`)
-- `Graph` struct with nodes, edges, containers
-- Signal-based state management
-- Node position saving to database
-- Drag state tracking (lasso, edge creation, node dragging)
-- Physics simulation constants (not yet fully implemented)
+#### Drag-to-Move
+- **fx/fy fields** on GraphNode for fixed positions during drag
+- **fix_node_position()** - Sets fx/fy on drag start
+- **release_node_position()** - Clears fx/fy on drag end
+- **Restart simulation** after release to let node settle
 
-#### 5. Graph Rendering
-- **Nodes** (`src/ui/graph_nodes.rs`): `GraphNodeComponent` with proper event handling
-- **Edges** (`src/ui/graph_edges.rs`): `GraphSvgOverlay` for SVG edge rendering
-- **Types** (`src/ui/graph_types.rs`): `GraphNode`, `GraphEdge`, `NodeKind`, `Vec2`
+#### Filesystem Scanning
+- **scan_directory()** - Scans actual filesystem, creates nodes in orbit pattern
+- **Orbit positioning** - 300px radius around parent
+- **Hierarchy edges** - Automatically created for parent-child
+- **Trigger**: Alt+click on machine/drive node
 
-#### 6. File Picker (`src/ui/file_picker.rs`)
-- Custom column-based file navigation
-- Multi-pane support (browse multiple locations simultaneously)
-- Drag-to-workspace capability
-- Persistent state (minimizes instead of closing)
+#### Visual Enhancements
+- **Cluster backgrounds** - 350px radius circles, 8% opacity, machine/drive colors
+- **Edges behind nodes** - SVG z-index: 1, nodes render on top
+- **Edge preview line** - Transforms mouse coords to graph space for accurate tracking
 
-#### 7. Notification System (`src/ui/notification.rs`)
-- Toast notifications with levels (info, warning, error, progress)
-- Spinner for ongoing operations
-- Auto-dismiss with configurable timeout
-- Progress bar support
+### ✅ COMPLETED - Infrastructure
 
-#### 8. Review Queue (`src/ui/review_queue.rs`)
-- Conflict resolution UI
-- Review item display with metadata
-- Resolution actions (skip, overwrite, merge)
+1. **Database Layer** (`src/db.rs`)
+   - SurrealDB embedded connection
+   - Schema: machine, drive, location, intent, review_item
+   - Drive watcher for mount detection
+   - Query helpers for graph data
+
+2. **App Structure** (`src/app.rs`)
+   - Root component with global state
+   - `refresh_tick` signal for data refreshes
+   - `hostname` state
+   - Proper `use_effect` patterns (no infinite loops)
+
+3. **Graph Component** (`src/ui/graph.rs`)
+   - `MappingGraph` component
+   - `GraphToolbar` with machine chips
+   - Resource-based data loading
+   - Add machine panel
+
+4. **Graph State** (`src/ui/graph_store.rs`)
+   - `Graph` struct with nodes, edges, containers
+   - Signal-based state management
+   - Position persistence to database
+   - Drag state tracking (lasso, edge, node drag, panning)
+
+5. **Graph Rendering**
+   - **Nodes** (`src/ui/graph_nodes.rs`): FileNode, DirNode, GroupNode, MachineNode, DriveNode
+   - **Edges** (`src/ui/graph_edges.rs`): SVG overlay with bezier curves
+   - **Types** (`src/ui/graph_types.rs`): GraphNode, GraphEdge, NodeKind, Vec2
+
+6. **File Picker** (`src/ui/file_picker.rs`)
+   - Column-based navigation
+   - Multi-pane support
+   - Drag-to-workspace
+   - Persistent (minimizes, doesn't close)
+
+7. **Notification System** (`src/ui/notification.rs`)
+   - Toast notifications (info, warning, error, progress)
+   - Auto-dismiss with timeout
+   - Progress bar support
+
+8. **Review Queue** (`src/ui/review_queue.rs`)
+   - Conflict resolution UI
+   - Resolution actions (skip, overwrite, merge)
 
 ---
 
-### ❌ Incomplete / Not Working
+### ❌ INCOMPLETE / NEEDS WORK
 
-#### 1. Force-Directed Layout
-**Status:** Partially implemented, not functional
-**Location:** `src/ui/graph_store.rs`, `src/ui/graph_nodes.rs`
+#### 1. Zoom Functionality
+**Status:** NOT WORKING - Dioxus API incompatibility
+**Location:** `src/ui/graph.rs` - wheel handler removed
+
+**Problem:**
+- `WheelData` API varies across Dioxus versions
+- No consistent `delta_y()` or field access
+
+**Fix Needed:**
+- Find correct Dioxus wheel event API
+- Or implement zoom buttons as fallback
+- Reference: `GraphCanvas.tsx` uses D3 zoom behavior
+
+---
+
+#### 2. Directory Expansion (Click to Expand)
+**Status:** PARTIAL - toggle_expand() exists, needs filesystem integration
+
+**What Works:**
+- `toggle_expand()` in Graph struct
+- Sets `expanded: true` on node kind
+- Finds children by parent_id matching
 
 **What's Missing:**
-- Physics simulation loop (currently disabled to prevent infinite loops)
-- Node positioning based on forces (repulsion, attraction, collision)
-- Animation for node expansion/collapse
-- Orbit view for directory children
+- On-demand filesystem scanning when expanding directories (not just machines/drives)
+- Current implementation only scans machines/drives
+- Directory nodes from DB don't trigger scan
 
-**Reference:** See `external/nexus-node-sync/components/GraphCanvas.tsx` for D3 implementation
+**Fix Needed:**
+- Extend scan logic to Directory nodes
+- Pass directory path to scan function
+- Show "Scanning..." status during async scan
 
-#### 2. Directory Expansion
-**Status:** Data structure ready, UI not implemented
-**Location:** `src/ui/graph_store.rs` - `toggle_expand()`, `wake()`
+**Reference:** `App.tsx` - `handleNodeClick()` expansion logic
+
+---
+
+#### 3. Edge Creation (Drag to Create Sync)
+**Status:** PARTIAL - UI exists, DB creation missing
+
+**What Works:**
+- Ctrl/Alt+click starts edge creation
+- Rubber band line follows cursor
+- DragState::CreatingEdge tracks state
 
 **What's Missing:**
-- Visual expansion animation
-- Orbit positioning for children
-- "Enter directory" view (filtering workspace to show only children)
-- Breadcrumb navigation for nested directories
+- Drop on target node doesn't complete edge
+- No intent created in database
+- No visual feedback on hover over target
 
-**Reference:** See `external/nexus-node-sync/App.tsx` - `handleNodeClick()` expansion logic
+**Fix Needed:**
+- Add onmouseup handler in node components
+- Call `create_edge_in_db()` on drop
+- Add edge to graph state
+- Show "Create sync?" confirmation
 
-#### 3. Node Grouping
-**Status:** Not implemented
-**Location:** N/A
+**Reference:** `App.tsx` - `linkMode` and edge creation
+
+---
+
+#### 4. Lasso Selection
+**Status:** PARTIAL - Drag tracking exists, multi-drag missing
+
+**What Works:**
+- Shift+drag creates selection rectangle
+- `select_in_rect()` selects nodes in area
+- Visual rectangle during drag
+
+**What's Missing:**
+- Multi-node drag (move all selected together)
+- Selected nodes don't move together
+- No visual indication of multi-selection during drag
+
+**Fix Needed:**
+- Track all selected nodes during drag
+- Apply same offset to all selected
+- Release all on drag end
+
+**Reference:** `GraphCanvas.tsx` - `dragBehavior` multi-node drag
+
+---
+
+#### 5. Node Visual Design
+**Status:** BASIC - All nodes use same styling
+
+**What's Missing:**
+- Circle nodes for directories/groups (currently all rectangular)
+- Size based on descendant count (logarithmic scale)
+- Status indicators (synced, syncing, error, offline)
+- Selection glow/highlight
+- Gradient fills (see TypeScript reference)
+
+**Reference Values:**
+```rust
+fn calculate_node_size(descendants: usize) -> f64 {
+    let log_count = (1.0 + descendants as f64).ln();
+    (80.0 + log_count * 15.0).clamp(60.0, 150.0)
+}
+```
+
+**Reference:** TypeScript gradients in `GraphCanvas.tsx` defs
+
+---
+
+#### 6. Node Grouping
+**Status:** NOT IMPLEMENTED
 
 **What's Missing:**
 - Group creation from selected nodes
-- Group node rendering (circle containing other nodes)
-- Group expansion/collapse
+- Group node rendering (circle containing nodes)
+- Group expand/collapse
 - Edge merging for grouped nodes
 
-**Reference:** See `external/nexus-node-sync/App.tsx` - `handleGroupNodes()`
-
-#### 4. Edge Creation
-**Status:** Drag state tracking exists, creation incomplete
-**Location:** `src/ui/graph.rs` - mouse event handlers
-
-**What's Missing:**
-- Visual edge preview during drag
-- Edge completion on node drop
-- Intent creation in database
-- Edge status visualization (idle, syncing, complete, error)
-
-**Reference:** See `external/nexus-node-sync/App.tsx` - `linkMode` and `handleNodeClick()`
-
-#### 5. Lasso Selection
-**Status:** Drag state tracking exists, selection incomplete
-**Location:** `src/ui/graph_store.rs` - `select_in_rect()`
-
-**What's Missing:**
-- Visual selection rectangle during drag
-- Multi-node drag (move selected nodes together)
-- Keyboard shortcuts (Shift+click, Ctrl+click)
-
-**Reference:** See `external/nexus-node-sync/components/GraphCanvas.tsx` - `dragBehavior`
-
-#### 6. Node Visual Design
-**Status:** Basic rendering exists, styling incomplete
-**Location:** `src/ui/graph_nodes.rs`
-
-**What's Missing:**
-- Circle nodes for directories/groups (currently all same shape)
-- Size based on descendant count
-- Status indicators (synced, syncing, error, offline)
-- Selection glow/highlight
-- Gradient fills (see TypeScript reference for colors)
+**Reference:** `App.tsx` - `handleGroupNodes()`
 
 ---
 
@@ -167,6 +255,9 @@ Kip is a file synchronization orchestrator with a force-directed graph UI. Users
 │  │  - drag_state: DragState                    │      │
 │  │  - selected: HashSet<String>                │      │
 │  │  - sim_running: bool                        │      │
+│  │  - viewport_x/y/scale: f64                  │      │
+│  │  - scanning: Option<String>                 │      │
+│  │  - scan_progress: String                    │      │
 │  └─────────────────────────────────────────────┘      │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -190,14 +281,20 @@ App
 ├── MappingGraph
 │   ├── GraphToolbar
 │   │   └── MachineChip (×N)
-│   ├── Workspace (div)
-│   │   ├── GraphSvgOverlay (SVG)
-│   │   │   ├── Edge paths (×N)
-│   │   │   └── Lasso rectangle
-│   │   └── GraphNodeComponent (×N)
-│   │       ├── DirectoryNode (circle)
-│   │       ├── FileNode (pill)
-│   │       └── DeviceNode (circle)
+│   ├── Workspace (div, 100% width/height)
+│   │   ├── Viewport Transform (div)
+│   │   │   ├── GraphSvgOverlay (SVG)
+│   │   │   │   ├── Cluster circles
+│   │   │   │   ├── Edge paths (×N)
+│   │   │   │   ├── Rubber band line
+│   │   │   │   └── Lasso rectangle
+│   │   │   └── GraphNodeComponent (×N)
+│   │   │       ├── FileNode (pill)
+│   │   │       ├── DirNode (circle)
+│   │   │       ├── GroupNode (circle)
+│   │   │       ├── MachineNode (circle)
+│   │   │       └── DriveNode (circle)
+│   │   └── (pan/zoom handlers)
 │   └── AddMachinePanel
 ├── FilePickerLayer
 │   └── PickerPane (×N)
@@ -212,24 +309,24 @@ App
 ## Key Files
 
 ### Core
-- `src/main.rs` - Entry point, logging setup (console only, WARN level)
+- `src/main.rs` - Entry point, logging (console only, WARN level)
 - `src/app.rs` - Root component, global state
 - `src/db.rs` - Database initialization, queries
 
 ### UI Components
 - `src/ui/mod.rs` - Module exports
-- `src/ui/graph.rs` - Main graph component
-- `src/ui/graph_store.rs` - Graph state management
-- `src/ui/graph_nodes.rs` - Node rendering
-- `src/ui/graph_edges.rs` - Edge rendering
-- `src/ui/graph_types.rs` - Type definitions
+- `src/ui/graph.rs` - Main graph component, simulation loop, mouse handlers
+- `src/ui/graph_store.rs` - Graph struct, physics, filesystem scanning
+- `src/ui/graph_nodes.rs` - Node rendering components
+- `src/ui/graph_edges.rs` - SVG edge overlay, cluster backgrounds
+- `src/ui/graph_types.rs` - GraphNode, GraphEdge, NodeKind, Vec2
 - `src/ui/file_picker.rs` - File picker component
 - `src/ui/notification.rs` - Notification system
 - `src/ui/container_components.rs` - Machine chips, add panel
 
 ### Types
 - `src/models/mod.rs` - Database models
-- `src/devices/macos.rs` - macOS-specific device detection
+- `src/devices/macos.rs` - macOS device detection
 
 ---
 
@@ -237,7 +334,7 @@ App
 
 ### 1. Infinite Loops (CRITICAL)
 
-**Symptom:** App freezes, CPU spikes, log file grows to 100+ GB
+**Symptom:** App freezes, CPU spikes, log file grows
 
 **Causes:**
 - `spawn()` in component body without `use_effect()`
@@ -251,36 +348,22 @@ use_effect(move || {
     spawn(async move { /* ... */ });
 });
 
-// Don't update signals from inside use_resource
-// Instead, use separate use_effect to watch resource
+// Separate resource and effect
 let data = use_resource(move || async move { load().await });
 use_effect(move || {
     if let Some(d) = data.read().as_ref() {
         signal.write().update(d);
     }
 });
-```
 
-### 2. Signal vs Value Capture
-
-```rust
-// ❌ Wrong - captures Signal<u32>
+// Capture values, not signals
 use_resource(move || {
-    let tick = refresh_tick;
+    let tick = refresh_tick; // tick is u32 VALUE
     async move { /* ... */ }
 });
-
-// ✅ Correct - captures u32 value
-use_resource(move || {
-    let tick = refresh_tick; // tick is u32
-    async move {
-        let _ = tick; // Use value
-        /* ... */
-    }
-});
 ```
 
-### 3. DbHandle Moves
+### 2. DbHandle Moves
 
 ```rust
 // Clone before moving into multiple closures
@@ -290,35 +373,34 @@ let loaded_data = use_resource(move || {
     async move { /* ... */ }
 });
 
-// db is still available here for other uses
+// db still available for other uses
 let db_for_handler = db.clone();
-rsx! {
-    button {
-        onclick: move |_| {
-            let db = db_for_handler.clone();
-            spawn(async move { /* ... */ });
-        }
-    }
-}
 ```
 
-### 4. Logging
+### 3. Viewport Transform
 
+All mouse coordinates must be transformed:
 ```rust
-// ❌ Don't enable file logging (will fill disk)
-// ✅ Console only, WARN level
-tracing_subscriber::fmt()
-    .with_max_level(tracing::Level::WARN)
-    .init();
+// Screen space → Graph space
+let graph_x = (mouse_x - viewport_x) / viewport_scale;
+let graph_y = (mouse_y - viewport_y) / viewport_scale;
 ```
+
+### 4. Force Parameters
+
+Current values tuned for cluster separation:
+- High repulsion (2000) pushes clusters apart
+- Low center gravity (0.003) prevents clumping
+- Long edge lengths (180-250px) give breathing room
+
+**Don't reduce repulsion** or clusters will attract each other.
 
 ---
 
 ## Reference Implementation Notes
 
-### TypeScript Force-Directed Graph (`external/nexus-node-sync/`)
+### TypeScript D3 Configuration
 
-**D3 Configuration:**
 ```typescript
 d3.forceSimulation(nodes)
   .force("link", d3.forceLink(links)
@@ -332,81 +414,68 @@ d3.forceSimulation(nodes)
     .iterations(2))
 ```
 
-**Node Types:**
-- `root` - Purple gradient, largest
-- `device` - Blue gradient, large circle
-- `folder` - Slate gradient, medium circle
-- `group` - Green gradient, medium circle
-- `file` - Small circle (or pill shape)
+### Node Gradients (TypeScript)
+```typescript
+// Device (Blue)
+grad.append("stop").attr("offset", "0%").attr("stop-color", "#60a5fa");
+grad.append("stop").attr("offset", "100%").attr("stop-color", "#1d4ed8");
 
-**Interactions:**
-- Click node → Select / Expand
-- Shift+click → Multi-select
-- Shift+drag background → Lasso select
-- Drag node → Move (with physics)
-- Link mode → Create sync edge
+// Folder (Slate)
+grad.append("stop").attr("offset", "0%").attr("stop-color", "#94a3b8");
+grad.append("stop").attr("offset", "100%").attr("stop-color", "#334155");
 
-**Key Patterns to Port:**
-1. Simulation restart on node add/remove
-2. Drag fixes position temporarily (`fx`, `fy`)
-3. Multi-node drag (drag selection together)
-4. Zoom/pan with mouse wheel
-5. Selection glow effect
+// Group (Green)
+grad.append("stop").attr("offset", "0%").attr("stop-color", "#34d399");
+grad.append("stop").attr("offset", "100%").attr("stop-color", "#059669");
 
----
-
-## Next Development Priorities
-
-### Phase 1: Force-Directed Layout
-1. Implement physics simulation (use existing Rust crate or port D3 logic)
-2. Add simulation loop with proper start/stop control
-3. Update node positions on tick
-4. Add drag-to-move with physics
-
-### Phase 2: Directory Expansion
-1. Implement orbit positioning for children
-2. Add expansion animation
-3. Implement "enter directory" view
-4. Add breadcrumb navigation
-
-### Phase 3: Node Grouping
-1. Create group from selected nodes
-2. Render group as containing circle
-3. Implement group expand/collapse
-4. Merge edges for grouped nodes
-
-### Phase 4: Polish
-1. Node visual design (gradients, sizes, status indicators)
-2. Edge status visualization
-3. Smooth animations
-4. Performance optimization for 100+ nodes
+// Root (Purple)
+grad.append("stop").attr("offset", "0%").attr("stop-color", "#c084fc");
+grad.append("stop").attr("offset", "100%").attr("stop-color", "#7e22ce");
+```
 
 ---
 
 ## Build & Run
 
 ```bash
-# Build
-dx build
-
-# Run in dev mode
-dx serve --platform desktop
-
-# Check without building
-dx check
+dx build          # Build
+dx serve          # Dev mode with hot reload
+dx check          # Check without building
 ```
 
-**Note:** Always use `dx` commands, not `cargo build`.
+**NEVER use `cargo build`** - Dioxus projects must use `dx` commands.
 
 ---
 
 ## Testing Checklist
 
 Before marking a feature complete:
-- [ ] No infinite loops (monitor CPU and log file size)
+- [ ] No infinite loops (monitor CPU, log file size)
 - [ ] No console errors
 - [ ] Works with 0 nodes (empty state)
 - [ ] Works with 100+ nodes (performance)
 - [ ] All interactions work (click, drag, lasso, etc.)
-- [ ] State persists across app restart (if applicable)
+- [ ] State persists across restart (if applicable)
 - [ ] No memory leaks (monitor over time)
+- [ ] Viewport transform applied to all mouse coords
+- [ ] Edges render behind nodes (z-index)
+- [ ] Cluster backgrounds visible but faint
+
+---
+
+## Next Steps
+
+### Immediate (P0)
+1. Fix zoom functionality (wheel event API)
+2. Complete edge creation (DB intent creation)
+3. Directory expansion with filesystem scanning
+
+### Short-term (P1)
+4. Lasso multi-drag
+5. Node visual polish (circles, gradients, sizes)
+6. Node grouping
+
+### Long-term (P2)
+7. Performance optimization (1000+ nodes)
+8. Edge status visualization
+9. Smooth animations
