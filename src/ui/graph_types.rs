@@ -69,18 +69,27 @@ pub enum NodeKind {
 	File,
 	Directory { expanded: bool },
 	Group { expanded: bool },
-	Machine,
-	Drive { connected: bool },
+	Machine { expanded: bool },
+	Drive { connected: bool, expanded: bool },
 }
 
 impl NodeKind {
 	pub fn is_expandable(&self) -> bool {
-		matches!(self, NodeKind::Directory { .. } | NodeKind::Group { .. })
+		matches!(
+			self,
+			NodeKind::Directory { .. }
+				| NodeKind::Group { .. }
+				| NodeKind::Machine { .. }
+				| NodeKind::Drive { .. }
+		)
 	}
 
 	pub fn is_expanded(&self) -> bool {
 		match self {
-			NodeKind::Directory { expanded } | NodeKind::Group { expanded } => *expanded,
+			NodeKind::Directory { expanded }
+			| NodeKind::Group { expanded }
+			| NodeKind::Machine { expanded }
+			| NodeKind::Drive { expanded, .. } => *expanded,
 			_ => false,
 		}
 	}
@@ -100,6 +109,9 @@ pub struct GraphNode {
 	pub visible: bool,
 	pub width: f64,
 	pub height: f64,
+	// Fixed position during drag (D3-style)
+	pub fx: Option<f64>,
+	pub fy: Option<f64>,
 }
 
 impl GraphNode {
@@ -219,7 +231,7 @@ pub fn node_dimensions(kind: &NodeKind, child_count: usize) -> (f64, f64) {
 			let size = (DIR_MIN_SIZE + (1.0 + child_count as f64).ln() * 10.0).clamp(DIR_MIN_SIZE, DIR_MAX_SIZE);
 			(size, size)
 		}
-		NodeKind::Machine | NodeKind::Drive { .. } => (MACHINE_SIZE, MACHINE_SIZE),
+		NodeKind::Machine { .. } | NodeKind::Drive { .. } => (MACHINE_SIZE, MACHINE_SIZE),
 	}
 }
 

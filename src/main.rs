@@ -9,9 +9,9 @@ mod util;
 use dioxus::prelude::*;
 
 fn main() {
-	// Disable file logging - eats disk space
+	// Enable INFO level logging to console
 	tracing_subscriber::fmt()
-		.with_max_level(tracing::Level::WARN)
+		.with_max_level(tracing::Level::INFO)
 		.init();
 
 	info!("Starting Kip");

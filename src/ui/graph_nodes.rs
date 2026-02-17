@@ -5,6 +5,15 @@ use crate::ui::{
 	graph_types::*,
 };
 
+// ─── Helper: Get workspace-relative coordinates ───────────────
+
+fn get_workspace_coords(e: &MouseEvent) -> (f64, f64) {
+	// Use client coordinates and subtract header offset
+	// Header height: ~61px (padding 16+16 + font 17 + border 1 + spacing)
+	let client_coords = e.client_coordinates();
+	(client_coords.x, client_coords.y - 61.0)
+}
+
 // ─── GraphNodeComponent ────────────────────────────────────────
 // Main dispatcher that renders the appropriate node component based on NodeKind
 
@@ -20,7 +29,7 @@ pub fn GraphNodeComponent(graph: Signal<Graph>, node: GraphNode) -> Element {
 		NodeKind::Group { .. } => rsx! {
 			GroupNode { graph, node }
 		},
-		NodeKind::Machine => rsx! {
+		NodeKind::Machine { .. } => rsx! {
 			MachineNode { graph, node }
 		},
 		NodeKind::Drive { .. } => rsx! {
@@ -53,46 +62,44 @@ pub fn FileNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 		div {
 			class: "{class}",
 			style: "
-                left: {x}px; 
-                top: {y}px; 
-                width: {width}px; 
-                height: {height}px; 
+                left: {x}px;
+                top: {y}px;
+                width: {width}px;
+                height: {height}px;
                 --node-color: {color};
             ",
 			onmousedown: move |e: MouseEvent| {
 			    e.stop_propagation();
+
+			    let (mx, my) = get_workspace_coords(&e);
 
 			    if e.modifiers().shift() {
 			        // Toggle selection
 			        graph.with_mut(|g| g.toggle_select(&node_id));
 			    } else if e.modifiers().ctrl() || e.modifiers().alt() {
 			        // Start edge creation
-			        let coords = e.page_coordinates();
 			        let center_x = x + width / 2.0;
 			        let center_y = y + height / 2.0;
 
 			        graph
-			            // Left click - start potential drag or click action
-
 			            .with_mut(|g| {
 			                g.drag_state = DragState::CreatingEdge {
 			                    source_id: node_id.clone(),
 			                    source_x: center_x,
 			                    source_y: center_y,
-			                    mouse_x: coords.x,
-			                    mouse_y: coords.y,
+			                    mouse_x: mx,
+			                    mouse_y: my,
 			                };
 			            });
 			    } else {
-			        let coords = e.page_coordinates();
 			        graph
 			            .with_mut(|g| {
 			                g.drag_state = DragState::ClickPending {
 			                    node_id: node_id.clone(),
-			                    start_x: coords.x,
-			                    start_y: coords.y,
-			                    mouse_x: coords.x,
-			                    mouse_y: coords.y,
+			                    start_x: mx,
+			                    start_y: my,
+			                    mouse_x: mx,
+			                    mouse_y: my,
 			                };
 			            });
 			    }
@@ -127,46 +134,45 @@ pub fn DirNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 		div {
 			class: "{class}",
 			style: "
-                left: {x}px; 
-                top: {y}px; 
-                width: {width}px; 
-                height: {height}px; 
+                left: {x}px;
+                top: {y}px;
+                width: {width}px;
+                height: {height}px;
                 --node-color: {color};
             ",
 			onmousedown: move |e: MouseEvent| {
 			    e.stop_propagation();
+
+			    let (mx, my) = get_workspace_coords(&e);
+			    tracing::info!("*** DIR NODE CLICK: {} at ({:.1}, {:.1}) ***", label, mx, my);
 
 			    if e.modifiers().shift() {
 			        // Toggle selection
 			        graph.with_mut(|g| g.toggle_select(&node_id));
 			    } else if e.modifiers().ctrl() || e.modifiers().alt() {
 			        // Start edge creation
-			        let coords = e.page_coordinates();
 			        let center_x = x + width / 2.0;
 			        let center_y = y + height / 2.0;
 
 			        graph
-			            // Left click - toggle expansion for directories
-
 			            .with_mut(|g| {
 			                g.drag_state = DragState::CreatingEdge {
 			                    source_id: node_id.clone(),
 			                    source_x: center_x,
 			                    source_y: center_y,
-			                    mouse_x: coords.x,
-			                    mouse_y: coords.y,
+			                    mouse_x: mx,
+			                    mouse_y: my,
 			                };
 			            });
 			    } else {
-			        let coords = e.page_coordinates();
 			        graph
 			            .with_mut(|g| {
 			                g.drag_state = DragState::ClickPending {
 			                    node_id: node_id.clone(),
-			                    start_x: coords.x,
-			                    start_y: coords.y,
-			                    mouse_x: coords.x,
-			                    mouse_y: coords.y,
+			                    start_x: mx,
+			                    start_y: my,
+			                    mouse_x: mx,
+			                    mouse_y: my,
 			                };
 			            });
 			    }
@@ -216,37 +222,35 @@ pub fn GroupNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 			onmousedown: move |e: MouseEvent| {
 			    e.stop_propagation();
 
+			    let (mx, my) = get_workspace_coords(&e);
+
 			    if e.modifiers().shift() {
 			        // Toggle selection
 			        graph.with_mut(|g| g.toggle_select(&node_id));
 			    } else if e.modifiers().ctrl() || e.modifiers().alt() {
 			        // Start edge creation
-			        let coords = e.page_coordinates();
 			        let center_x = x + width / 2.0;
 			        let center_y = y + height / 2.0;
 
 			        graph
-			            // Left click - start potential drag or click action
-
 			            .with_mut(|g| {
 			                g.drag_state = DragState::CreatingEdge {
 			                    source_id: node_id.clone(),
 			                    source_x: center_x,
 			                    source_y: center_y,
-			                    mouse_x: coords.x,
-			                    mouse_y: coords.y,
+			                    mouse_x: mx,
+			                    mouse_y: my,
 			                };
 			            });
 			    } else {
-			        let coords = e.page_coordinates();
 			        graph
 			            .with_mut(|g| {
 			                g.drag_state = DragState::ClickPending {
 			                    node_id: node_id.clone(),
-			                    start_x: coords.x,
-			                    start_y: coords.y,
-			                    mouse_x: coords.x,
-			                    mouse_y: coords.y,
+			                    start_x: mx,
+			                    start_y: my,
+			                    mouse_x: mx,
+			                    mouse_y: my,
 			                };
 			            });
 			    }
@@ -291,37 +295,35 @@ pub fn MachineNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 			onmousedown: move |e: MouseEvent| {
 			    e.stop_propagation();
 
+			    let (mx, my) = get_workspace_coords(&e);
+
 			    if e.modifiers().shift() {
 			        // Toggle selection
 			        graph.with_mut(|g| g.toggle_select(&node_id));
 			    } else if e.modifiers().ctrl() || e.modifiers().alt() {
 			        // Start edge creation
-			        let coords = e.page_coordinates();
 			        let center_x = x + width / 2.0;
 			        let center_y = y + height / 2.0;
 
 			        graph
-			            // Left click - start potential drag or click action
-
 			            .with_mut(|g| {
 			                g.drag_state = DragState::CreatingEdge {
 			                    source_id: node_id.clone(),
 			                    source_x: center_x,
 			                    source_y: center_y,
-			                    mouse_x: coords.x,
-			                    mouse_y: coords.y,
+			                    mouse_x: mx,
+			                    mouse_y: my,
 			                };
 			            });
 			    } else {
-			        let coords = e.page_coordinates();
 			        graph
 			            .with_mut(|g| {
 			                g.drag_state = DragState::ClickPending {
 			                    node_id: node_id.clone(),
-			                    start_x: coords.x,
-			                    start_y: coords.y,
-			                    mouse_x: coords.x,
-			                    mouse_y: coords.y,
+			                    start_x: mx,
+			                    start_y: my,
+			                    mouse_x: mx,
+			                    mouse_y: my,
 			                };
 			            });
 			    }
@@ -347,7 +349,7 @@ pub fn DriveNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 	let height = node.height;
 	let is_selected = graph().selected.contains(&node_id);
 	let is_connected = match &node.kind {
-		NodeKind::Drive { connected } => *connected,
+		NodeKind::Drive { connected, .. } => *connected,
 		_ => false,
 	};
 
@@ -378,37 +380,35 @@ pub fn DriveNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 			onmousedown: move |e: MouseEvent| {
 			    e.stop_propagation();
 
+			    let (mx, my) = get_workspace_coords(&e);
+
 			    if e.modifiers().shift() {
 			        // Toggle selection
 			        graph.with_mut(|g| g.toggle_select(&node_id));
 			    } else if e.modifiers().ctrl() || e.modifiers().alt() {
 			        // Start edge creation
-			        let coords = e.page_coordinates();
 			        let center_x = x + width / 2.0;
 			        let center_y = y + height / 2.0;
 
 			        graph
-			            // Left click - start potential drag or click action
-
 			            .with_mut(|g| {
 			                g.drag_state = DragState::CreatingEdge {
 			                    source_id: node_id.clone(),
 			                    source_x: center_x,
 			                    source_y: center_y,
-			                    mouse_x: coords.x,
-			                    mouse_y: coords.y,
+			                    mouse_x: mx,
+			                    mouse_y: my,
 			                };
 			            });
 			    } else {
-			        let coords = e.page_coordinates();
 			        graph
 			            .with_mut(|g| {
 			                g.drag_state = DragState::ClickPending {
 			                    node_id: node_id.clone(),
-			                    start_x: coords.x,
-			                    start_y: coords.y,
-			                    mouse_x: coords.x,
-			                    mouse_y: coords.y,
+			                    start_x: mx,
+			                    start_y: my,
+			                    mouse_x: mx,
+			                    mouse_y: my,
 			                };
 			            });
 			    }

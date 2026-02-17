@@ -6,7 +6,7 @@ use crate::ui::{
 };
 
 // ─── GraphSvgOverlay ───────────────────────────────────────────
-// SVG overlay for rendering edges, rubber band, and lasso
+// SVG overlay for rendering edges, cluster backgrounds, rubber band, and lasso
 
 #[component]
 pub fn GraphSvgOverlay(graph: Signal<Graph>, canvas_width: f64, canvas_height: f64) -> Element {
@@ -16,6 +16,16 @@ pub fn GraphSvgOverlay(graph: Signal<Graph>, canvas_width: f64, canvas_height: f
 		.visible_nodes()
 		.iter()
 		.map(|node| (node.id.clone(), node.center_x(), node.center_y()))
+		.collect();
+
+	// Calculate cluster centers and radii for machine/drive nodes
+	let clusters: Vec<(String, f64, f64, &str)> = graph_snapshot
+		.visible_nodes()
+		.iter()
+		.filter(|n| matches!(n.kind, NodeKind::Machine { .. } | NodeKind::Drive { .. }))
+		.map(|n| {
+			(n.id.clone(), n.center_x(), n.center_y(), n.color.as_str())
+		})
 		.collect();
 
 	// Pre-compute lasso rect
@@ -42,6 +52,18 @@ pub fn GraphSvgOverlay(graph: Signal<Graph>, canvas_width: f64, canvas_height: f
 			width: "{canvas_width}",
 			height: "{canvas_height}",
 			style: "width: {canvas_width}px; height: {canvas_height}px;",
+
+			// Render cluster backgrounds for machines/drives
+			for (cluster_id, cx, cy, color) in clusters.iter() {
+				circle {
+					key: "cluster_{cluster_id}",
+					cx: "{cx}",
+					cy: "{cy}",
+					r: "350",
+					fill: "{color}",
+					opacity: "0.08",
+				}
+			}
 
 			// Render all visible edges
 			for edge in visible_edges.iter() {

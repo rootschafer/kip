@@ -7,16 +7,41 @@ use crate::{db::DbHandle, ui::graph_types::*};
 
 // ─── Force simulation constants ───────────────────────────────
 
-const REPULSION: f64 = 500.0;
-const SPRING_K: f64 = 0.05;
-const SPRING_REST: f64 = 120.0;
-const PARENT_K: f64 = 0.08;
-const PARENT_REST: f64 = 80.0;
-const CENTER_GRAVITY: f64 = 0.01;
-const DAMPING: f64 = 0.9;
-const ALPHA_DECAY: f64 = 0.995;
-const ALPHA_MIN: f64 = 0.001;
-const WARM_RESTART: f64 = 0.3;
+// D3 force equivalents - strengthened for better layout
+const REPULSION: f64 = 800.0; // forceManyBody strength (increased from 300)
+const SPRING_K: f64 = 0.1; // Link force strength (increased from 0.02)
+const CENTER_GRAVITY: f64 = 0.02; // forceX/forceY strength (reduced - let repulsion dominate)
+const DAMPING: f64 = 0.85; // Velocity damping per tick (reduced from 0.9 - less damping)
+const ALPHA_DECAY: f64 = 0.95; // Alpha decay rate (reduced from 0.99 - lasts longer)
+const ALPHA_MIN: f64 = 0.001; // Stop threshold
+const ALPHA_START: f64 = 0.5; // Initial alpha on wake
+const WARM_RESTART: f64 = 0.5; // Alpha boost on changes (increased from 0.3)
+
+// Collision settings
+const COLLISION_ITERATIONS: usize = 3; // Increased from 2 for better separation
+const COLLISION_K: f64 = 0.7; // Collision force strength
+
+// ─── Helper functions for edge lengths and collision radii ────
+
+/// Get target edge length based on edge type
+fn get_edge_length(_edge: &GraphEdge) -> f64 {
+	// Note: GraphEdge doesn't have a type field yet, default to sync length
+	// For now, use status as a proxy; in future, add explicit edge type
+	match _edge.status.as_str() {
+		"sync" | "active" | "idle" | "complete" => 150.0,
+		"group" => 60.0,
+		_ => 80.0, // hierarchy default
+	}
+}
+
+/// Get collision radius based on node type
+fn get_collision_radius(node: &GraphNode) -> f64 {
+	match &node.kind {
+		NodeKind::Machine { .. } | NodeKind::Drive { .. } => 45.0,
+		NodeKind::Directory { .. } | NodeKind::Group { .. } => 30.0,
+		NodeKind::File => 15.0,
+	}
+}
 
 // ─── Interaction state ────────────────────────────────────────
 
@@ -48,6 +73,10 @@ pub enum DragState {
 		offset_x: f64,
 		offset_y: f64,
 	},
+	Panning {
+		start_x: f64,
+		start_y: f64,
+	},
 }
 
 // ─── Graph state ──────────────────────────────────────────────
@@ -62,6 +91,13 @@ pub struct Graph {
 	pub drag_state: DragState,
 	pub containers: Vec<ContainerView>,
 	pub review_count: i64,
+	// Filesystem scanning state
+	pub scanning: Option<String>, // Node ID being scanned
+	pub scan_progress: String,    // Status message
+	// Viewport state (zoom/pan)
+	pub viewport_scale: f64,      // Zoom level (1.0 = 100%)
+	pub viewport_x: f64,          // Pan X offset
+	pub viewport_y: f64,          // Pan Y offset
 }
 
 impl Graph {
@@ -75,6 +111,11 @@ impl Graph {
 			drag_state: DragState::None,
 			containers: Vec::new(),
 			review_count: 0,
+			scanning: None,
+			scan_progress: String::new(),
+			viewport_scale: 1.0,
+			viewport_x: 0.0,
+			viewport_y: 0.0,
 		}
 	}
 
@@ -124,34 +165,82 @@ impl Graph {
 
 	pub fn toggle_expand(&mut self, id: &str) {
 		// Find the node's path and current expansion state
-		let (path, was_expanded) = match self.find_node(id) {
-			Some(n) => (n.path.clone(), n.kind.is_expanded()),
-			None => return,
+		let (path, was_expanded, node_label, node_id, node_kind) = match self.find_node(id) {
+			Some(n) => (n.path.clone(), n.kind.is_expanded(), n.label.clone(), n.id.clone(), n.kind.clone()),
+			None => {
+				tracing::warn!("toggle_expand: node {} not found", id);
+				return;
+			},
 		};
 		let new_expanded = !was_expanded;
+
+		tracing::info!("toggle_expand: {} (path: '{}', expanding: {})", node_label, path, new_expanded);
 
 		// Update the node's kind
 		if let Some(node) = self.find_node_mut(id) {
 			match &mut node.kind {
-				NodeKind::Directory { expanded } | NodeKind::Group { expanded } => {
+				NodeKind::Directory { expanded }
+				| NodeKind::Group { expanded }
+				| NodeKind::Machine { expanded }
+				| NodeKind::Drive { expanded, .. } => {
 					*expanded = new_expanded;
 				}
-				_ => return,
+				NodeKind::File => {
+					// Files are not expandable, do nothing
+					return;
+				}
+			}
+		}
+
+		// For Machine/Drive nodes, scan filesystem if expanding
+		if new_expanded && path.is_empty() {
+			match &node_kind {
+				NodeKind::Machine { .. } | NodeKind::Drive { .. } => {
+					// Will be handled by async filesystem scan
+					// For now, just show existing children from DB
+				}
+				_ => {}
 			}
 		}
 
 		// Collect child IDs to toggle visibility
+		// Use parent_id matching for Machine/Drive (empty path), path matching for Directory/Group
+		tracing::info!("toggle_expand: checking children, path='{}', node_id={}", path, node_id);
 		let child_ids: Vec<String> = self
 			.nodes
 			.iter()
-			.filter(|n| is_direct_child(&path, &n.path))
+			.filter(|n| {
+				let matches = if path.is_empty() {
+					// For Machine/Drive nodes with empty path, match by parent_id
+					let match_result = n.parent_id.as_ref().map_or(false, |pid| {
+						let matches = pid == &node_id;
+						tracing::info!("toggle_expand: checking {} (parent_id={}), matches={}", n.label, pid, matches);
+						matches
+					});
+					tracing::info!("toggle_expand: parent_id match for {}: {}", n.label, match_result);
+					match_result
+				} else {
+					// For Directory/Group nodes, match by path
+					let result = is_direct_child(&path, &n.path);
+					tracing::info!("toggle_expand: path match for {} (path={}): {}", n.label, n.path, result);
+					result
+				};
+				matches
+			})
 			.map(|n| n.id.clone())
 			.collect();
 
+		tracing::info!("toggle_expand: found {} direct children", child_ids.len());
+
 		// Toggle visibility of direct children
+		let mut children_revealed = false;
 		for child_id in child_ids {
 			if let Some(child) = self.find_node_mut(&child_id) {
 				child.visible = new_expanded;
+				tracing::info!("toggle_expand: set {} visible={} at position ({:.1}, {:.1})", child.label, new_expanded, child.position.x, child.position.y);
+				if new_expanded {
+					children_revealed = true;
+				}
 				// If collapsing, also collapse any expanded children recursively
 				if !new_expanded {
 					match &mut child.kind {
@@ -164,8 +253,14 @@ impl Graph {
 			}
 		}
 
+		// Boost simulation alpha if children were revealed
+		if new_expanded && children_revealed {
+			self.alpha = self.alpha.max(0.3);
+			self.sim_running = true;
+		}
+
 		// If collapsing, hide all descendants (not just direct children)
-		if !new_expanded {
+		if !new_expanded && !path.is_empty() {
 			let descendant_ids: Vec<String> = self
 				.nodes
 				.iter()
@@ -180,13 +275,110 @@ impl Graph {
 		}
 
 		self.wake(WARM_RESTART);
+		tracing::info!("toggle_expand: simulation restarted");
+	}
+
+	/// Start filesystem scanning for a Machine or Drive node
+	pub fn start_filesystem_scan(&mut self, node_id: &str, node_label: &str, mount_point: Option<&str>) {
+		self.scanning = Some(node_id.to_string());
+		self.scan_progress = format!("Scanning {}...", node_label);
+		tracing::info!("start_filesystem_scan: {} ({:?})", node_label, mount_point);
+	}
+
+	/// Complete filesystem scanning and add scanned nodes
+	pub fn complete_filesystem_scan(&mut self, node_id: &str, new_nodes: Vec<GraphNode>) {
+		let count = new_nodes.len();
+		self.scanning = None;
+		self.scan_progress = format!("Found {} items", count);
+		
+		// Add nodes and create edges to parent
+		for node in new_nodes {
+			let child_id = node.id.clone();
+			self.nodes.push(node);
+			
+			// Create edge from parent to child
+			self.edges.push(GraphEdge {
+				id: format!("edge_{}_{}", node_id, child_id),
+				source_id: node_id.to_string(),
+				dest_id: child_id,
+				status: "idle".to_string(),
+				total_files: 0,
+				completed_files: 0,
+				created_at: chrono::Utc::now().to_rfc3339(),
+			});
+		}
+		
+		// Boost simulation significantly to spread nodes out
+		self.alpha = 1.0; // Maximum energy
+		self.sim_running = true;
+		tracing::info!("complete_filesystem_scan: sim_running={}, alpha={}, total nodes={}, edges={}", 
+			self.sim_running, self.alpha, self.nodes.len(), self.edges.len());
+	}
+
+	/// Clear scan status
+	pub fn clear_scan_status(&mut self) {
+		self.scanning = None;
+		self.scan_progress = String::new();
+	}
+
+	/// Zoom the viewport
+	pub fn zoom(&mut self, delta: f64, center_x: f64, center_y: f64) {
+		let old_scale = self.viewport_scale;
+		let new_scale = (self.viewport_scale * delta).clamp(0.1, 5.0);
+		
+		// Zoom toward mouse position
+		self.viewport_x = center_x - (center_x - self.viewport_x) * (new_scale / old_scale);
+		self.viewport_y = center_y - (center_y - self.viewport_y) * (new_scale / old_scale);
+		self.viewport_scale = new_scale;
+	}
+
+	/// Pan the viewport
+	pub fn pan(&mut self, dx: f64, dy: f64) {
+		self.viewport_x += dx;
+		self.viewport_y += dy;
 	}
 
 	pub fn set_position(&mut self, id: &str, x: f64, y: f64) {
 		if let Some(node) = self.find_node_mut(id) {
 			node.position = Vec2::new(x, y);
 			node.velocity = Vec2::default();
-			node.pinned = true;
+			// Use fx/fy for drag fixing instead of pinned
+			node.fx = Some(x);
+			node.fy = Some(y);
+		}
+	}
+
+	pub fn fix_node_position(&mut self, id: &str) {
+		if let Some(node) = self.find_node_mut(id) {
+			node.fx = Some(node.position.x);
+			node.fy = Some(node.position.y);
+		}
+	}
+
+	pub fn release_node_position(&mut self, id: &str) {
+		if let Some(node) = self.find_node_mut(id) {
+			node.fx = None;
+			node.fy = None;
+		}
+	}
+
+	pub fn fix_selected_nodes(&mut self) {
+		let ids: Vec<String> = self.selected.iter().cloned().collect();
+		for id in ids {
+			if let Some(node) = self.find_node_mut(&id) {
+				node.fx = Some(node.position.x);
+				node.fy = Some(node.position.y);
+			}
+		}
+	}
+
+	pub fn release_selected_nodes(&mut self) {
+		let ids: Vec<String> = self.selected.iter().cloned().collect();
+		for id in ids {
+			if let Some(node) = self.find_node_mut(&id) {
+				node.fx = None;
+				node.fy = None;
+			}
 		}
 	}
 
@@ -230,6 +422,11 @@ impl Graph {
 
 	// ── Simulation ──
 
+	pub fn start_simulation(&mut self) {
+		self.alpha = ALPHA_START;
+		self.sim_running = true;
+	}
+
 	fn wake(&mut self, alpha: f64) {
 		// Only wake if not already running, to prevent constant restarts
 		if !self.sim_running {
@@ -247,6 +444,7 @@ impl Graph {
 			return false;
 		}
 
+		tracing::info!("tick: alpha={:.4}, nodes={}, edges={}", self.alpha, self.nodes.len(), self.edges.len());
 		apply_forces(&mut self.nodes, &self.edges, self.alpha);
 		self.alpha *= ALPHA_DECAY;
 
@@ -254,6 +452,7 @@ impl Graph {
 		if self.alpha < ALPHA_MIN {
 			self.sim_running = false;
 			self.alpha = 0.0; // Ensure alpha is properly set to 0
+			tracing::info!("tick: simulation stopped (alpha too low)");
 			return false;
 		}
 
@@ -286,30 +485,37 @@ fn apply_forces(nodes: &mut [GraphNode], edges: &[GraphEdge], alpha: f64) {
 	// Collect visible indices for O(1) lookup
 	let visible: Vec<usize> = (0..n).filter(|&i| nodes[i].visible).collect();
 
-	// Workspace center (approximate)
+	// Workspace center
 	let center = Vec2::new(600.0, 400.0);
 
-	// 1. Repulsion between all visible pairs
+	// 1. Repulsion between all visible pairs (forceManyBody equivalent)
 	for i in 0..visible.len() {
 		for j in (i + 1)..visible.len() {
 			let ai = visible[i];
 			let bi = visible[j];
+
+			// Skip nodes with fixed positions
+			let a_fixed = nodes[ai].fx.is_some() && nodes[ai].fy.is_some();
+			let b_fixed = nodes[bi].fx.is_some() && nodes[bi].fy.is_some();
+			if a_fixed && b_fixed {
+				continue;
+			}
 
 			let delta = nodes[bi].center() - nodes[ai].center();
 			let dist = delta.length().max(1.0);
 			let force_mag = REPULSION / (dist * dist);
 			let force = delta.normalized() * force_mag * alpha;
 
-			if !nodes[ai].pinned {
+			if !a_fixed && !nodes[ai].pinned {
 				nodes[ai].velocity -= force;
 			}
-			if !nodes[bi].pinned {
+			if !b_fixed && !nodes[bi].pinned {
 				nodes[bi].velocity += force;
 			}
 		}
 	}
 
-	// 2. Edge springs
+	// 2. Edge springs (forceLink equivalent)
 	for edge in edges {
 		let src_idx = nodes.iter().position(|n| n.id == edge.source_id);
 		let dst_idx = nodes.iter().position(|n| n.id == edge.dest_id);
@@ -318,22 +524,28 @@ fn apply_forces(nodes: &mut [GraphNode], edges: &[GraphEdge], alpha: f64) {
 				continue;
 			}
 
+			let s_fixed = nodes[si].fx.is_some() && nodes[si].fy.is_some();
+			let d_fixed = nodes[di].fx.is_some() && nodes[di].fy.is_some();
+			if s_fixed && d_fixed {
+				continue;
+			}
+
 			let delta = nodes[di].center() - nodes[si].center();
 			let dist = delta.length().max(1.0);
-			let displacement = dist - SPRING_REST;
+			let target_dist = get_edge_length(edge);
+			let displacement = dist - target_dist;
 			let force = delta.normalized() * SPRING_K * displacement * alpha;
 
-			if !nodes[si].pinned {
+			if !s_fixed && !nodes[si].pinned {
 				nodes[si].velocity += force;
 			}
-			if !nodes[di].pinned {
+			if !d_fixed && !nodes[di].pinned {
 				nodes[di].velocity -= force;
 			}
 		}
 	}
 
-	// 3. Parent-child springs (location → machine/drive clustering)
-	//    Also works for directory → child clustering
+	// 3. Parent-child springs (hierarchy clustering)
 	let parent_pairs: Vec<(usize, usize)> = visible
 		.iter()
 		.filter_map(|&i| {
@@ -347,33 +559,82 @@ fn apply_forces(nodes: &mut [GraphNode], edges: &[GraphEdge], alpha: f64) {
 		.collect();
 
 	for (child_idx, parent_idx) in parent_pairs {
+		let c_fixed = nodes[child_idx].fx.is_some() && nodes[child_idx].fy.is_some();
+		let p_fixed = nodes[parent_idx].fx.is_some() && nodes[parent_idx].fy.is_some();
+		if c_fixed && p_fixed {
+			continue;
+		}
+
 		let delta = nodes[parent_idx].center() - nodes[child_idx].center();
 		let dist = delta.length().max(1.0);
-		let displacement = dist - PARENT_REST;
-		let force = delta.normalized() * PARENT_K * displacement * alpha;
+		let displacement = dist - 80.0; // Short parent-child distance
+		let force = delta.normalized() * 0.08 * displacement * alpha;
 
-		if !nodes[child_idx].pinned {
+		if !c_fixed && !nodes[child_idx].pinned {
 			nodes[child_idx].velocity += force;
 		}
-		if !nodes[parent_idx].pinned {
+		if !p_fixed && !nodes[parent_idx].pinned {
 			nodes[parent_idx].velocity -= force * 0.3; // Parents resist movement more
 		}
 	}
 
-	// 4. Center gravity
+	// 4. Center gravity (forceX/forceY equivalent)
 	for &i in &visible {
 		if nodes[i].pinned {
+			continue;
+		}
+		let c_fixed = nodes[i].fx.is_some() && nodes[i].fy.is_some();
+		if c_fixed {
 			continue;
 		}
 		let to_center = center - nodes[i].center();
 		nodes[i].velocity += to_center * CENTER_GRAVITY * alpha;
 	}
 
-	// 5. Apply velocities with damping
+	// 5. Collision resolution (forceCollide equivalent)
+	for _iteration in 0..COLLISION_ITERATIONS {
+		for i in 0..visible.len() {
+			for j in (i + 1)..visible.len() {
+				let ai = visible[i];
+				let bi = visible[j];
+
+				let a_fixed = nodes[ai].fx.is_some() && nodes[ai].fy.is_some();
+				let b_fixed = nodes[bi].fx.is_some() && nodes[bi].fy.is_some();
+
+				let delta = nodes[bi].center() - nodes[ai].center();
+				let dist = delta.length();
+				let min_dist = get_collision_radius(&nodes[ai]) + get_collision_radius(&nodes[bi]);
+
+				if dist > 0.0 && dist < min_dist {
+					let overlap = min_dist - dist;
+					let push = delta.normalized() * overlap * COLLISION_K * alpha;
+
+					if !a_fixed && !nodes[ai].pinned {
+						nodes[ai].velocity -= push * 0.5;
+					}
+					if !b_fixed && !nodes[bi].pinned {
+						nodes[bi].velocity += push * 0.5;
+					}
+				}
+			}
+		}
+	}
+
+	// 6. Apply velocities with damping and respect fixed positions
 	for &i in &visible {
-		if nodes[i].pinned {
+		let fixed = nodes[i].fx.is_some() && nodes[i].fy.is_some();
+
+		if fixed || nodes[i].pinned {
+			// Use fixed position if set
+			if let (Some(fx), Some(fy)) = (nodes[i].fx, nodes[i].fy) {
+				nodes[i].position.x = fx;
+				nodes[i].position.y = fy;
+			}
+			nodes[i].velocity = Vec2::default();
 			continue;
 		}
+
+		// Apply damping and integrate
 		nodes[i].velocity = nodes[i].velocity * DAMPING;
 		nodes[i].position += nodes[i].velocity;
 
@@ -448,8 +709,13 @@ pub async fn load_graph_data(
 	let nodes = load_nodes(db, &containers).await?;
 	tracing::info!("Loaded {} nodes", nodes.len());
 
-	let edges = load_edges(db).await?;
+	let mut edges = load_edges(db).await?;
 	tracing::info!("Loaded {} edges", edges.len());
+	
+	// Add hierarchy edges for parent-child relationships
+	let hierarchy_edges = create_hierarchy_edges(&nodes);
+	tracing::info!("Created {} hierarchy edges", hierarchy_edges.len());
+	edges.extend(hierarchy_edges);
 
 	let review_count = load_review_count(db).await.unwrap_or(0);
 	tracing::info!("Loaded {} review items", review_count);
@@ -529,8 +795,8 @@ async fn load_nodes(db: &DbHandle, containers: &[ContainerView]) -> Result<Vec<G
 	for container in containers {
 		let cid = rid_string(&container.id);
 		let (w, h) = match container.kind.as_str() {
-			"drive" => node_dimensions(&NodeKind::Drive { connected: container.connected }, 0),
-			_ => node_dimensions(&NodeKind::Machine, 0),
+			"drive" => node_dimensions(&NodeKind::Drive { connected: container.connected, expanded: false }, 0),
+			_ => node_dimensions(&NodeKind::Machine { expanded: false }, 0),
 		};
 
 		nodes.push(GraphNode {
@@ -538,8 +804,8 @@ async fn load_nodes(db: &DbHandle, containers: &[ContainerView]) -> Result<Vec<G
 			label: container.name.clone(),
 			path: String::new(),
 			kind: match container.kind.as_str() {
-				"drive" => NodeKind::Drive { connected: container.connected },
-				_ => NodeKind::Machine,
+				"drive" => NodeKind::Drive { connected: container.connected, expanded: false },
+				_ => NodeKind::Machine { expanded: false },
 			},
 			parent_id: None,
 			color: container.color.clone(),
@@ -549,6 +815,8 @@ async fn load_nodes(db: &DbHandle, containers: &[ContainerView]) -> Result<Vec<G
 			visible: true,
 			width: w,
 			height: h,
+			fx: None,
+			fy: None,
 		});
 	}
 
@@ -586,10 +854,15 @@ async fn load_nodes(db: &DbHandle, containers: &[ContainerView]) -> Result<Vec<G
 		let parent_rid = rid_string(owner_id);
 
 		// Determine if directory
-		let is_dir = std::path::Path::new(&row.path).is_dir()
+		// Check if any other location is a child of this path, OR if it ends with /
+		let is_dir = row.path.ends_with('/')
 			|| all_paths
 				.iter()
 				.any(|&other| path_contains(&row.path, other));
+
+		if is_dir {
+			tracing::info!("Location {} is a directory (path: {})", rid_string(&row.id), row.path);
+		}
 
 		// Count direct children among known locations
 		let child_count = all_paths
@@ -639,10 +912,31 @@ async fn load_nodes(db: &DbHandle, containers: &[ContainerView]) -> Result<Vec<G
 			visible: is_top_level,
 			width: w,
 			height: h,
+			fx: None,
+			fy: None,
 		});
 	}
 
 	Ok(nodes)
+}
+
+/// Create hierarchy edges for all nodes with parent_id
+fn create_hierarchy_edges(nodes: &[GraphNode]) -> Vec<GraphEdge> {
+	let mut edges = Vec::new();
+	for node in nodes {
+		if let Some(ref parent_id) = node.parent_id {
+			edges.push(GraphEdge {
+				id: format!("hier_{}_{}", parent_id, node.id),
+				source_id: parent_id.clone(),
+				dest_id: node.id.clone(),
+				status: "idle".to_string(),
+				total_files: 0,
+				completed_files: 0,
+				created_at: chrono::Utc::now().to_rfc3339(),
+			});
+		}
+	}
+	edges
 }
 
 async fn load_edges(db: &DbHandle) -> Result<Vec<GraphEdge>, String> {
@@ -774,6 +1068,95 @@ pub async fn save_node_position(db: &DbHandle, node_id: &str, x: f64, y: f64) ->
 		.map_err(|e| e.to_string())?;
 
 	Ok(())
+}
+
+/// Scan a directory and create graph nodes for its contents
+pub async fn scan_directory(
+	_db: &DbHandle,
+	parent_id: &str,
+	parent_path: &str,
+	parent_x: f64,
+	parent_y: f64,
+) -> Result<Vec<GraphNode>, String> {
+	use std::f64::consts::PI;
+	use std::fs;
+
+	let path = std::path::Path::new(parent_path);
+	if !path.exists() {
+		tracing::warn!("scan_directory: path does not exist: {}", parent_path);
+		return Ok(Vec::new());
+	}
+
+	let mut nodes = Vec::new();
+	let entries = match fs::read_dir(path) {
+		Ok(entries) => entries,
+		Err(e) => {
+			tracing::warn!("scan_directory: failed to read {:?}: {}", path, e);
+			return Ok(Vec::new());
+		}
+	};
+
+	// Collect entries first to count them
+	let mut entry_list = Vec::new();
+	for entry in entries {
+		let entry = match entry {
+			Ok(e) => e,
+			Err(_) => continue,
+		};
+		entry_list.push(entry);
+	}
+
+	// Position nodes in an orbit around the parent
+	let orbit_radius = 200.0;
+	let total = entry_list.len() as f64;
+	
+	for (i, entry) in entry_list.into_iter().enumerate() {
+		let entry_path = entry.path();
+		let file_name = entry_path
+			.file_name()
+			.and_then(|n| n.to_str())
+			.unwrap_or("")
+			.to_string();
+
+		// Skip hidden files
+		if file_name.starts_with('.') {
+			continue;
+		}
+
+		let is_dir = entry_path.is_dir();
+		let full_path = entry_path.to_string_lossy().to_string();
+
+		// Calculate orbit position
+		let angle = (i as f64 / total) * 2.0 * PI;
+		let x = parent_x + orbit_radius * angle.cos();
+		let y = parent_y + orbit_radius * angle.sin();
+
+		nodes.push(GraphNode {
+			id: format!("fs:{}", full_path),
+			label: file_name.clone(),
+			path: full_path.clone(),
+			kind: if is_dir {
+				NodeKind::Directory { expanded: false }
+			} else {
+				NodeKind::File
+			},
+			parent_id: Some(parent_id.to_string()),
+			color: "#4a9eff".to_string(),
+			position: Vec2::new(x, y),
+			velocity: Vec2::default(),
+			pinned: false,
+			visible: true,
+			width: if is_dir { 60.0 } else { 150.0 },
+			height: if is_dir { 60.0 } else { 36.0 },
+			fx: None,
+			fy: None,
+		});
+
+		tracing::info!("scan_directory: found {} ({})", file_name, full_path);
+	}
+
+	tracing::info!("scan_directory: scanned {} entries from {}", nodes.len(), parent_path);
+	Ok(nodes)
 }
 
 // ─── Helpers ──────────────────────────────────────────────────

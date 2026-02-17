@@ -37,7 +37,7 @@ pub fn DbErrorApp() -> Element {
 
 #[component]
 pub fn App() -> Element {
-	// let db = use_context::<DbHandle>();
+	let db = use_context::<DbHandle>();
 	// let db = use_signal(|| DbHandle::new());
 	let picker = use_store(|| PickerManager::new());
 	let notifs = use_store(|| NotificationService::new());
@@ -45,10 +45,11 @@ pub fn App() -> Element {
 	let mut refresh_tick = use_signal(|| 0u32);
 
 	// Load hostname once
+	let db_for_hostname = db.clone();
 	use_effect(move || {
+		let db_clone = db_for_hostname.clone();
 		spawn(async move {
-			let db = use_context::<DbHandle>();
-			let mut response = db.db.query("SELECT name FROM machine:local").await.unwrap();
+			let mut response = db_clone.db.query("SELECT name FROM machine:local").await.unwrap();
 			let result: Option<String> = response.take("name").unwrap_or(None);
 			if let Some(name) = result {
 				*hostname.write() = name;
@@ -57,24 +58,14 @@ pub fn App() -> Element {
 	});
 
 	// Start drive watcher (polls /Volumes/ every 5s)
+	let db_for_watcher = db.clone();
 	use_effect(move || {
+		let db_clone = db_for_watcher.clone();
 		spawn(async move {
-			let db = use_context::<DbHandle>();
-			let _watcher = crate::devices::DriveWatcher::start(db);
+			let _watcher = crate::devices::DriveWatcher::start(db_clone);
 			std::future::pending::<()>().await;
 		});
 	});
-
-	// // Poll for updates every 2 seconds
-	// use_effect(move || {
-	//     spawn(async move {
-	//         loop {
-	//             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-	//             // Only increment refresh tick if it's not already being refreshed
-	//             *refresh_tick.write() += 1;
-	//         }
-	//     });
-	// });
 
 	// Poll for updates every 2 seconds - use use_effect so it only runs once
 	use_effect(move || {
