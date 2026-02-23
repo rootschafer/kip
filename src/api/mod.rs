@@ -3,13 +3,13 @@
 //! This module provides the public API surface for Kip. Both the GUI (Dioxus)
 //! and CLI (clap) consume this API — neither touches the database directly.
 
-pub mod types;
-pub mod intent;
-pub mod transfer;
-pub mod location;
-pub mod review;
-pub mod query;
 pub mod config;
+pub mod intent;
+pub mod location;
+pub mod query;
+pub mod review;
+pub mod transfer;
+pub mod types;
 
 pub use types::*;
 pub use intent::*;

@@ -28,8 +28,8 @@ fn get_edge_length(_edge: &GraphEdge) -> f64 {
 	// Increased lengths for better spacing
 	match _edge.status.as_str() {
 		"sync" | "active" | "idle" | "complete" => 250.0, // was 200
-		"group" => 120.0, // was 100
-		_ => 180.0, // hierarchy default, was 150
+		"group" => 120.0,                                 // was 100
+		_ => 180.0,                                       // hierarchy default, was 150
 	}
 }
 
@@ -96,9 +96,9 @@ pub struct Graph {
 	pub scanning: Option<String>, // Node ID being scanned
 	pub scan_progress: String,    // Status message
 	// Viewport state (zoom/pan)
-	pub viewport_scale: f64,      // Zoom level (1.0 = 100%)
-	pub viewport_x: f64,          // Pan X offset
-	pub viewport_y: f64,          // Pan Y offset
+	pub viewport_scale: f64, // Zoom level (1.0 = 100%)
+	pub viewport_x: f64,     // Pan X offset
+	pub viewport_y: f64,     // Pan Y offset
 }
 
 impl Graph {
@@ -167,11 +167,17 @@ impl Graph {
 	pub fn toggle_expand(&mut self, id: &str) {
 		// Find the node's path and current expansion state
 		let (path, was_expanded, node_label, node_id, node_kind) = match self.find_node(id) {
-			Some(n) => (n.path.clone(), n.kind.is_expanded(), n.label.clone(), n.id.clone(), n.kind.clone()),
+			Some(n) => (
+				n.path.clone(),
+				n.kind.is_expanded(),
+				n.label.clone(),
+				n.id.clone(),
+				n.kind.clone(),
+			),
 			None => {
 				tracing::warn!("toggle_expand: node {} not found", id);
 				return;
-			},
+			}
 		};
 		let new_expanded = !was_expanded;
 
@@ -238,7 +244,13 @@ impl Graph {
 		for child_id in child_ids {
 			if let Some(child) = self.find_node_mut(&child_id) {
 				child.visible = new_expanded;
-				tracing::info!("toggle_expand: set {} visible={} at position ({:.1}, {:.1})", child.label, new_expanded, child.position.x, child.position.y);
+				tracing::info!(
+					"toggle_expand: set {} visible={} at position ({:.1}, {:.1})",
+					child.label,
+					new_expanded,
+					child.position.x,
+					child.position.y
+				);
 				if new_expanded {
 					children_revealed = true;
 				}
@@ -291,12 +303,12 @@ impl Graph {
 		let count = new_nodes.len();
 		self.scanning = None;
 		self.scan_progress = format!("Found {} items", count);
-		
+
 		// Add nodes and create edges to parent
 		for node in new_nodes {
 			let child_id = node.id.clone();
 			self.nodes.push(node);
-			
+
 			// Create edge from parent to child
 			self.edges.push(GraphEdge {
 				id: format!("edge_{}_{}", node_id, child_id),
@@ -308,12 +320,17 @@ impl Graph {
 				created_at: chrono::Utc::now().to_rfc3339(),
 			});
 		}
-		
+
 		// Boost simulation significantly to spread nodes out
 		self.alpha = 1.0; // Maximum energy
 		self.sim_running = true;
-		tracing::info!("complete_filesystem_scan: sim_running={}, alpha={}, total nodes={}, edges={}", 
-			self.sim_running, self.alpha, self.nodes.len(), self.edges.len());
+		tracing::info!(
+			"complete_filesystem_scan: sim_running={}, alpha={}, total nodes={}, edges={}",
+			self.sim_running,
+			self.alpha,
+			self.nodes.len(),
+			self.edges.len()
+		);
 	}
 
 	/// Clear scan status
@@ -326,7 +343,7 @@ impl Graph {
 	pub fn zoom(&mut self, delta: f64, center_x: f64, center_y: f64) {
 		let old_scale = self.viewport_scale;
 		let new_scale = (self.viewport_scale * delta).clamp(0.1, 5.0);
-		
+
 		// Zoom toward mouse position
 		self.viewport_x = center_x - (center_x - self.viewport_x) * (new_scale / old_scale);
 		self.viewport_y = center_y - (center_y - self.viewport_y) * (new_scale / old_scale);
@@ -712,7 +729,7 @@ pub async fn load_graph_data(
 
 	let mut edges = load_edges(db).await?;
 	tracing::info!("Loaded {} edges", edges.len());
-	
+
 	// Add hierarchy edges for parent-child relationships
 	let hierarchy_edges = create_hierarchy_edges(&nodes);
 	tracing::info!("Created {} hierarchy edges", hierarchy_edges.len());
@@ -949,7 +966,7 @@ async fn load_edges(db: &DbHandle) -> Result<Vec<GraphEdge>, String> {
 		)
 		.await
 		.map_err(|e| e.to_string())?;
-	
+
 	let rows: Vec<IntentRow> = match resp.take(0) {
 		Ok(r) => r,
 		Err(e) => {
@@ -1086,8 +1103,7 @@ pub async fn scan_directory(
 	parent_x: f64,
 	parent_y: f64,
 ) -> Result<Vec<GraphNode>, String> {
-	use std::f64::consts::PI;
-	use std::fs;
+	use std::{f64::consts::PI, fs};
 
 	let path = std::path::Path::new(parent_path);
 	if !path.exists() {
@@ -1117,7 +1133,7 @@ pub async fn scan_directory(
 	// Position nodes in an orbit around the parent
 	let orbit_radius = 300.0; // Increased from 200 for better initial spacing
 	let total = entry_list.len() as f64;
-	
+
 	for (i, entry) in entry_list.into_iter().enumerate() {
 		let entry_path = entry.path();
 		let file_name = entry_path

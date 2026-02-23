@@ -224,19 +224,19 @@ pub fn FilePickerLayer(picker: Store<PickerManager>, on_location_added: EventHan
 			div { class: "picker-tab-bar",
 				for (id , label , name) in minimized_panes.iter() {
 					{
-					    let id = *id;
-					    let label = label.clone();
-					    let name = name.clone();
-					    rsx! {
+						let id = *id;
+						let label = label.clone();
+						let name = name.clone();
+						rsx! {
 						div {
 							key: "{id}",
 							class: "picker-tab",
 							onclick: move |_| {
-							    picker.restore(id);
+								picker.restore(id);
 							},
 							oncontextmenu: move |e: Event<MouseData>| {
-							    e.prevent_default();
-							    picker.close(id);
+								e.prevent_default();
+								picker.close(id);
 							},
 							span { class: "picker-tab-name", "{name}" }
 							span { class: "picker-tab-path", "{label}" }
@@ -331,31 +331,31 @@ fn PickerPaneView(picker: Store<PickerManager>, pane_id: u64, on_location_added:
 						class: if show_hidden { "picker-btn-toggle active" } else { "picker-btn-toggle" },
 						title: "Toggle hidden files",
 						onclick: move |_| {
-						    if let Some(idx) = find_pane_idx() {
-						        let panes = picker.panes();
-						        let pane_store = panes.index(idx);
-						        let new_show_hidden = !pane_store.show_hidden().cloned();
-						        pane_store.show_hidden().set(new_show_hidden);
-						        pane_store.columns().clear();
+							if let Some(idx) = find_pane_idx() {
+								let panes = picker.panes();
+								let pane_store = panes.index(idx);
+								let new_show_hidden = !pane_store.show_hidden().cloned();
+								pane_store.show_hidden().set(new_show_hidden);
+								pane_store.columns().clear();
 
-						        let root = pane_store.root_path().cloned();
-						        spawn(async move {
-						            let entries = read_dir_sorted(&root, new_show_hidden).await;
-						            if let Some(idx) = find_pane_idx() {
-						                let panes = picker.panes();
-						                let mut cols = panes.index(idx).columns();
-						                cols.set(
-						                    vec![
-						                        PickerColumn {
-						                            dir_path: root.to_path_buf(),
-						                            entries,
-						                            selected: None,
-						                        },
-						                    ],
-						                );
-						            }
-						        });
-						    }
+								let root = pane_store.root_path().cloned();
+								spawn(async move {
+									let entries = read_dir_sorted(&root, new_show_hidden).await;
+									if let Some(idx) = find_pane_idx() {
+										let panes = picker.panes();
+										let mut cols = panes.index(idx).columns();
+										cols.set(
+											vec![
+												PickerColumn {
+													dir_path: root.to_path_buf(),
+													entries,
+													selected: None,
+												},
+											],
+										);
+									}
+								});
+							}
 						},
 						".*"
 					}
@@ -381,52 +381,52 @@ fn PickerPaneView(picker: Store<PickerManager>, pane_id: u64, on_location_added:
 					div { key: "{col_idx}", class: "picker-column",
 						for (entry_idx , entry) in col.entries.iter().enumerate() {
 							{
-							    let is_selected = col.selected == Some(entry_idx);
-							    let is_dir = entry.is_dir;
-							    let entry_path = entry.path.clone();
-							    let name = entry.name.clone();
-							    let entry_class = if is_selected {
-							        "picker-entry selected"
-							    } else {
-							        "picker-entry"
-							    };
+								let is_selected = col.selected == Some(entry_idx);
+								let is_dir = entry.is_dir;
+								let entry_path = entry.path.clone();
+								let name = entry.name.clone();
+								let entry_class = if is_selected {
+									"picker-entry selected"
+								} else {
+									"picker-entry"
+								};
 
-							    let size_str = if is_dir { String::new() } else { format_size(entry.size) };
-							    rsx! {
+								let size_str = if is_dir { String::new() } else { format_size(entry.size) };
+								rsx! {
 								div {
 									key: "{name}",
 									class: "{entry_class}",
 									onclick: move |_| {
-									    let entry_path = entry_path.clone();
-									    async move {
-									        let show_hidden = {
-									            let Some(idx) = find_pane_idx() else { return };
-									            let panes = picker.panes();
-									            let pane_store = panes.index(idx);
-									            let mut cols = pane_store.columns();
-									            let mut cols_write = cols.write();
-									            cols_write.truncate(col_idx + 1);
-									            if let Some(col) = cols_write.get_mut(col_idx) {
-									                col.selected = Some(entry_idx);
-									            }
-									            drop(cols_write);
-									            pane_store.show_hidden().cloned()
-									        };
-									        if is_dir {
-									            let entries = read_dir_sorted(&entry_path, show_hidden).await;
-									            if let Some(idx) = find_pane_idx() {
-									                let panes = picker.panes();
-									                panes
-									                    .index(idx)
-									                    .columns()
-									                    .push(PickerColumn {
-									                        dir_path: entry_path.to_path_buf(),
-									                        entries,
-									                        selected: None,
-									                    });
-									            }
-									        }
-									    }
+										let entry_path = entry_path.clone();
+										async move {
+											let show_hidden = {
+												let Some(idx) = find_pane_idx() else { return };
+												let panes = picker.panes();
+												let pane_store = panes.index(idx);
+												let mut cols = pane_store.columns();
+												let mut cols_write = cols.write();
+												cols_write.truncate(col_idx + 1);
+												if let Some(col) = cols_write.get_mut(col_idx) {
+													col.selected = Some(entry_idx);
+												}
+												drop(cols_write);
+												pane_store.show_hidden().cloned()
+											};
+											if is_dir {
+												let entries = read_dir_sorted(&entry_path, show_hidden).await;
+												if let Some(idx) = find_pane_idx() {
+													let panes = picker.panes();
+													panes
+														.index(idx)
+														.columns()
+														.push(PickerColumn {
+															dir_path: entry_path.to_path_buf(),
+															entries,
+															selected: None,
+														});
+												}
+											}
+										}
 									},
 									if is_dir {
 										span { class: "entry-icon dir", "\u{25B8}" } // ▸
@@ -456,24 +456,24 @@ fn PickerPaneView(picker: Store<PickerManager>, pane_id: u64, on_location_added:
 					class: "btn-primary picker-add-btn",
 					disabled: !has_selection,
 					onclick: {
-					    let db = db.clone();
-					    move |_| {
-					        let sel = sel_path.clone();
-					        let cid = container_id.clone();
-					        let db = db.clone();
-					        spawn(async move {
-					            if let Some(path) = sel {
-					                let path_str = path.to_string_lossy().to_string();
-					                match add_location_from_picker(&db, &cid, &path_str).await {
-					                    Ok(()) => {
-					                        info!("location added from picker: {}", path_str);
-					                        on_location_added.call(());
-					                    }
-					                    Err(e) => error!("add location failed: {}", e),
-					                }
-					            }
-					        });
-					    }
+						let db = db.clone();
+						move |_| {
+							let sel = sel_path.clone();
+							let cid = container_id.clone();
+							let db = db.clone();
+							spawn(async move {
+								if let Some(path) = sel {
+									let path_str = path.to_string_lossy().to_string();
+									match add_location_from_picker(&db, &cid, &path_str).await {
+										Ok(()) => {
+											info!("location added from picker: {}", path_str);
+											on_location_added.call(());
+										}
+										Err(e) => error!("add location failed: {}", e),
+									}
+								}
+							});
+						}
 					},
 					"Add to workspace"
 				}

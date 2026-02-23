@@ -45,13 +45,14 @@ pub fn GraphSvgOverlay(
 	let drag_state_snapshot = &graph_snapshot.drag_state;
 
 	// Pre-compute rubber-band line coordinates (transform mouse coords to graph space)
-	let rubber_band_line = if let DragState::CreatingEdge { source_x, source_y, mouse_x, mouse_y, .. } = &drag_state_snapshot {
-		let graph_mouse_x = (mouse_x - viewport_x) / viewport_scale;
-		let graph_mouse_y = (mouse_y - viewport_y) / viewport_scale;
-		Some((source_x, source_y, graph_mouse_x, graph_mouse_y))
-	} else {
-		None
-	};
+	let rubber_band_line =
+		if let DragState::CreatingEdge { source_x, source_y, mouse_x, mouse_y, .. } = &drag_state_snapshot {
+			let graph_mouse_x = (mouse_x - viewport_x) / viewport_scale;
+			let graph_mouse_y = (mouse_y - viewport_y) / viewport_scale;
+			Some((source_x, source_y, graph_mouse_x, graph_mouse_y))
+		} else {
+			None
+		};
 
 	rsx! {
 		svg {
@@ -65,18 +66,18 @@ pub fn GraphSvgOverlay(
 			// Render all visible edges
 			for edge in visible_edges.iter() {
 				{
-				    let source_pos = node_positions.iter().find(|(id, _, _)| *id == edge.source_id);
-				    let dest_pos = node_positions.iter().find(|(id, _, _)| *id == edge.dest_id);
-				    if let (Some((_, sx, sy)), Some((_, dx, dy))) = (source_pos, dest_pos) {
-				        let path_d = bezier_path(*sx, *sy, *dx, *dy);
-				        let color = edge_color(&edge.status);
-				        let width = if edge.status == "transferring" || edge.status == "scanning" {
-				            "3"
-				        } else {
-				            "2"
-				        };
+					let source_pos = node_positions.iter().find(|(id, _, _)| *id == edge.source_id);
+					let dest_pos = node_positions.iter().find(|(id, _, _)| *id == edge.dest_id);
+					if let (Some((_, sx, sy)), Some((_, dx, dy))) = (source_pos, dest_pos) {
+						let path_d = bezier_path(*sx, *sy, *dx, *dy);
+						let color = edge_color(&edge.status);
+						let width = if edge.status == "transferring" || edge.status == "scanning" {
+							"3"
+						} else {
+							"2"
+						};
 
-				        rsx! {
+						rsx! {
 					path {
 						key: "{edge.id}",
 						d: "{path_d}",
@@ -87,9 +88,9 @@ pub fn GraphSvgOverlay(
 						opacity: "0.7",
 					}
 				}
-				    } else {
-				        rsx! {}
-				    }
+					} else {
+						rsx! {}
+					}
 				}
 			}
 

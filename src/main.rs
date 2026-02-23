@@ -51,6 +51,6 @@ fn main() {
 
 #[cfg(not(feature = "desktop"))]
 fn main() {
-    // Web or other platform entry point
-    tracing::info!("Kip starting...");
+	// Web or other platform entry point
+	tracing::info!("Kip starting...");
 }

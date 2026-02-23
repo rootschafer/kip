@@ -71,14 +71,14 @@ pub fn GraphToolbar(
 					MachineChip {
 						container: container.clone(),
 						on_click: move |c: ContainerView| {
-						    on_container_click.call(c);
+							on_container_click.call(c);
 						},
 					}
 				}
 				button {
 					class: "btn-add",
 					onclick: move |_| {
-					    on_add_machine_click.call(());
+						on_add_machine_click.call(());
 					},
 					"+"
 				}
@@ -153,7 +153,7 @@ pub fn MappingGraph(
 			loop {
 				// Check if simulation should run before sleeping
 				let sim_state = graph.with(|g| g.sim_running);
-				
+
 				if !sim_state {
 					// Sleep longer when not running to reduce CPU usage
 					tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -194,20 +194,20 @@ pub fn MappingGraph(
 				containers: graph().containers.clone(),
 				review_count: graph().review_count,
 				on_add_machine_click: move |_| {
-				    *machine_name.write() = String::new();
-				    *machine_host.write() = String::new();
-				    *machine_user.write() = String::new();
-				    *add_panel.write() = AddPanelState::AddMachine;
+					*machine_name.write() = String::new();
+					*machine_host.write() = String::new();
+					*machine_user.write() = String::new();
+					*add_panel.write() = AddPanelState::AddMachine;
 				},
 				on_container_click: move |c: ContainerView| {
-				    if !c.connected {
-				        warn!("cannot add to disconnected target");
-				        return;
-				    }
-				    let cid = crate::ui::graph_store::rid_string(&c.id);
-				    let name = c.name.clone();
-				    let root = c.mount_point.clone().unwrap_or_else(|| "/".to_string());
-				    picker.open(cid, name, std::path::PathBuf::from(root));
+					if !c.connected {
+						warn!("cannot add to disconnected target");
+						return;
+					}
+					let cid = crate::ui::graph_store::rid_string(&c.id);
+					let name = c.name.clone();
+					let root = c.mount_point.clone().unwrap_or_else(|| "/".to_string());
+					picker.open(cid, name, std::path::PathBuf::from(root));
 				},
 			}
 
@@ -218,327 +218,356 @@ pub fn MappingGraph(
 				style: "width: 100%; height: 100%; overflow: hidden;",
 				// Zoom/pan handled via Alt+drag for now
 				onmousedown: move |e: MouseEvent| {
-				    let (x, y) = get_workspace_coords(&e);
-				    // Start panning on workspace click (Alt+click or middle click)
-				    if e.data().modifiers().alt() {
-				        let (vp_x, vp_y) = graph.with(|g| (g.viewport_x, g.viewport_y));
-				        graph.with_mut(|g| {
-				            g.drag_state = crate::ui::graph_store::DragState::Panning { 
-				                start_x: x, 
-				                start_y: y,
-				                start_viewport_x: vp_x,
-				                start_viewport_y: vp_y,
-				            };
-				        });
-				    } else if e.data().modifiers().shift() {
-				        graph
-				            .with_mut(|g| {
-				                g.drag_state = crate::ui::graph_store::DragState::Lasso {
-				                    start_x: x,
-				                    start_y: y,
-				                    current_x: x,
-				                    current_y: y,
-				                };
-				            });
-				    } else {
-				        graph
-				            .with_mut(|g| {
-				                g.clear_selection();
-				            });
-				    }
+					let (x, y) = get_workspace_coords(&e);
+					// Start panning on workspace click (Alt+click or middle click)
+					if e.data().modifiers().alt() {
+						let (vp_x, vp_y) = graph.with(|g| (g.viewport_x, g.viewport_y));
+						graph
+							.with_mut(|g| {
+								g.drag_state = crate::ui::graph_store::DragState::Panning {
+									start_x: x,
+									start_y: y,
+									start_viewport_x: vp_x,
+									start_viewport_y: vp_y,
+								};
+							});
+					} else if e.data().modifiers().shift() {
+						graph
+							.with_mut(|g| {
+								g.drag_state = crate::ui::graph_store::DragState::Lasso {
+									start_x: x,
+									start_y: y,
+									current_x: x,
+									current_y: y,
+								};
+							});
+					} else {
+						graph
+							.with_mut(|g| {
+								g.clear_selection();
+							});
+					}
 				},
 				onmousemove: move |e: MouseEvent| {
-				    let (x, y) = get_workspace_coords(&e);
-				    let drag_state_snapshot = graph().drag_state.clone();
+					let (x, y) = get_workspace_coords(&e);
+					let drag_state_snapshot = graph().drag_state.clone();
 
-				    // Handle panning - 1:1 with mouse movement
-				    if let crate::ui::graph_store::DragState::Panning { start_x, start_y, start_viewport_x, start_viewport_y } = &drag_state_snapshot {
-				        let dx = x - start_x;
-				        let dy = y - start_y;
-				        graph.with_mut(|g| g.set_viewport(start_viewport_x + dx, start_viewport_y + dy));
-				        return;
-				    }
+					// Handle panning - 1:1 with mouse movement
+					if let crate::ui::graph_store::DragState::Panning {
+						start_x,
+						start_y,
+						start_viewport_x,
 
-				    match &drag_state_snapshot {
-				        crate::ui::graph_store::DragState::CreatingEdge {
-				            source_id,
-				            source_x,
-				            source_y,
-				            ..
-				        } => {
-				            graph
-				                .with_mut(|g| {
-				                    g.drag_state = crate::ui::graph_store::DragState::CreatingEdge {
-				                        source_id: source_id.clone(),
-				                        source_x: *source_x,
-				                        source_y: *source_y,
-				                        mouse_x: x,
-				                        mouse_y: y,
-				                    };
-				                });
-				        }
-				        crate::ui::graph_store::DragState::Lasso { start_x, start_y, .. } => {
-				            graph
-				                .with_mut(|g| {
-				                    g.drag_state = crate::ui::graph_store::DragState::Lasso {
-				                        start_x: *start_x,
-				                        start_y: *start_y,
-				                        current_x: x,
-				                        current_y: y,
-				                    };
-				                });
-				        }
-				        crate::ui::graph_store::DragState::ClickPending {
-				            node_id,
-				            start_x,
-				            start_y,
-				            ..
-				        } => {
-				            let distance_moved = ((x - start_x).powi(2)
-				                + (y - start_y).powi(2))
-				                .sqrt();
-				            if distance_moved > 5.0 {
-				                // Fix the node position when drag starts
-				                graph
-				                    .with_mut(|g| {
-				                        g.fix_node_position(&node_id);
-				                        g.drag_state = crate::ui::graph_store::DragState::Dragging {
-				                            node_id: node_id.clone(),
-				                            offset_x: x - start_x,
-				                            offset_y: y - start_y,
-				                        };
-				                    });
-				            } else {
-				                graph
-				                    .with_mut(|g| {
-				                        g.drag_state = crate::ui::graph_store::DragState::ClickPending {
-				                            node_id: node_id.clone(),
-				                            start_x: *start_x,
-				                            start_y: *start_y,
-				                            mouse_x: x,
-				                            mouse_y: y,
-				                        };
-				                    });
-				            }
-				        }
-				        crate::ui::graph_store::DragState::Dragging {
-				            node_id,
-				            offset_x,
-				            offset_y,
-				        } => {
-				            let new_x = x - offset_x;
-				            let new_y = y - offset_y;
-				            graph
-				                .with_mut(|g| {
-				                    // Update fixed position during drag
-				                    if let Some(node) = g.find_node_mut(&node_id) {
-				                        node.fx = Some(new_x);
-				                        node.fy = Some(new_y);
-				                        node.position = Vec2::new(new_x, new_y);
-				                    }
-				                    g.drag_state = crate::ui::graph_store::DragState::Dragging {
-				                        node_id: node_id.clone(),
-				                        offset_x: *offset_x,
-				                        offset_y: *offset_y,
-				                    };
-				                });
-				        }
-				        _ => {}
-				    }
+						// Fix the node position when drag starts
+						// Update fixed position during drag
+						start_viewport_y,
+					} = &drag_state_snapshot {
+						let dx = x - start_x;
+						let dy = y - start_y;
+						graph
+							.with_mut(|g| {
+								g.set_viewport(start_viewport_x + dx, start_viewport_y + dy)
+							});
+						return;
+					}
+					match &drag_state_snapshot {
+						crate::ui::graph_store::DragState::CreatingEdge {
+							source_id,
+							source_x,
+							source_y,
+							..
+						} => {
+							graph
+								.with_mut(|g| {
+									g.drag_state = crate::ui::graph_store::DragState::CreatingEdge {
+										source_id: source_id.clone(),
+										source_x: *source_x,
+										source_y: *source_y,
+										mouse_x: x,
+										mouse_y: y,
+									};
+								});
+						}
+						crate::ui::graph_store::DragState::Lasso { start_x, start_y, .. } => {
+							graph
+								.with_mut(|g| {
+									g.drag_state = crate::ui::graph_store::DragState::Lasso {
+										start_x: *start_x,
+										start_y: *start_y,
+										current_x: x,
+										current_y: y,
+									};
+								});
+						}
+						crate::ui::graph_store::DragState::ClickPending {
+							node_id,
+							start_x,
+							start_y,
+							..
+						} => {
+							let distance_moved = ((x - start_x).powi(2) + (y - start_y).powi(2))
+								.sqrt();
+							if distance_moved > 5.0 {
+								graph
+									.with_mut(|g| {
+										g.fix_node_position(&node_id);
+										g.drag_state = crate::ui::graph_store::DragState::Dragging {
+											node_id: node_id.clone(),
+											offset_x: x - start_x,
+											offset_y: y - start_y,
+										};
+									});
+							} else {
+								graph
+									.with_mut(|g| {
+										g.drag_state = crate::ui::graph_store::DragState::ClickPending {
+											node_id: node_id.clone(),
+											start_x: *start_x,
+											start_y: *start_y,
+											mouse_x: x,
+											mouse_y: y,
+										};
+									});
+							}
+						}
+						crate::ui::graph_store::DragState::Dragging {
+							node_id,
+							offset_x,
+							offset_y,
+						} => {
+							let new_x = x - offset_x;
+							let new_y = y - offset_y;
+							graph
+								.with_mut(|g| {
+									if let Some(node) = g.find_node_mut(&node_id) {
+										node.fx = Some(new_x);
+										node.fy = Some(new_y);
+										node.position = Vec2::new(new_x, new_y);
+									}
+									g.drag_state = crate::ui::graph_store::DragState::Dragging {
+										node_id: node_id.clone(),
+										offset_x: *offset_x,
+										offset_y: *offset_y,
+									};
+								});
+						}
+						_ => {}
+					}
 				},
 				onmouseup: {
-				    let db = db.clone();
-				    move |_| {
-				        let current_drag = graph().drag_state.clone();
-				        match current_drag {
-				            // Edge creation will be handled by individual node components
-				            // when mouseup occurs over another node
+					let db = db.clone();
+					move |_| {
+						let current_drag = graph().drag_state.clone();
+						match current_drag {
+							// Edge creation will be handled by individual node components
+							// when mouseup occurs over another node
 
-				            // Check if it was actually a click (not a drag)
-				            // It was a click - handle expansion for directory nodes
+							// Check if it was actually a click (not a drag)
+							// It was a click - handle expansion for directory nodes
 
-				            // Toggle expansion for expandable nodes
+							// Toggle expansion for expandable nodes
 
-				            // Save the final position to the database
+							// Save the final position to the database
 
-				            crate::ui::graph_store::DragState::CreatingEdge { source_id: _, .. } => {}
-				            crate::ui::graph_store::DragState::Lasso {
-				                start_x,
-				                start_y,
-				                current_x,
-				                current_y,
-				            } => {
-				                let min_x = start_x.min(current_x);
-				                let max_x = start_x.max(current_x);
-				                let min_y = start_y.min(current_y);
-				                let max_y = start_y.max(current_y);
-				                graph
-				                    .with_mut(|g| {
-				                        g.select_in_rect(min_x, min_y, max_x, max_y);
-				                        g.drag_state = crate::ui::graph_store::DragState::None;
-				                    });
-				            }
-				            crate::ui::graph_store::DragState::ClickPending {
-				                node_id,
-				                start_x,
-				                start_y,
-				                mouse_x,
-				                mouse_y,
-				            } => {
-				                let distance_moved = ((mouse_x - start_x).powi(2)
-				                    + (mouse_y - start_y).powi(2))
-				                    .sqrt();
-				                tracing::info!("ClickPending: node={}, distance_moved={:.2}", node_id, distance_moved);
-				                if distance_moved < 5.0 {
-				                    let node_info = graph()
-				                        .find_node(&node_id)
-				                        .map(|n| (n.kind.clone(), n.path.clone(), n.label.clone()));
-				                    if let Some((kind, path, label)) = node_info {
-				                        tracing::info!("Click on node {}: kind={:?}, expandable={}", node_id, kind, kind.is_expandable());
-				                        if kind.is_expandable() {
-				                            tracing::info!("*** EXPANDING NODE {} ***", node_id);
-				                            let db_clone = db.clone();
-				                            let node_id_clone = node_id.clone();
-				                            let label_clone = label.clone();
-				                            let path_clone = path.clone();
-				                            let mut graph_signal = graph;
-				                            
-				                            // Start filesystem scan for Machine/Drive nodes
-				                            let is_machine_or_drive = matches!(
-				                                &kind,
-				                                crate::ui::graph_types::NodeKind::Machine { .. }
-				                                    | crate::ui::graph_types::NodeKind::Drive { .. }
-				                            );
-				                            
-				                            if is_machine_or_drive && path.is_empty() {
-				                                // Get mount point from containers
-				                                let mount_point = graph_signal().containers
-				                                    .iter()
-				                                    .find(|c| crate::ui::graph_store::rid_string(&c.id) == node_id)
-				                                    .and_then(|c| c.mount_point.clone());
-				                                    
-				                                graph_signal.with_mut(|g| {
-				                                    g.start_filesystem_scan(&node_id, &label, mount_point.as_deref());
-				                                    g.toggle_expand(&node_id);
-				                                });
-				                                
-				                                // Scan filesystem asynchronously
-				                                let mount_point = mount_point.unwrap_or_else(|| "/".to_string());
-				                                let mut graph_for_success = graph_signal;
-				                                let mut graph_for_error = graph_signal;
-				                                let node_id_for_scan = node_id.clone();
-				                                let graph_for_pos = graph_signal;
-				                                let node_id_for_pos = node_id.clone();
-				                                spawn(async move {
-				                                    // Get parent node position for orbit placement
-				                                    let (parent_x, parent_y) = graph_for_pos.with(|g| {
-				                                        g.find_node(&node_id_for_pos)
-				                                            .map(|n| (n.position.x, n.position.y))
-				                                            .unwrap_or((600.0, 400.0))
-				                                    });
-				                                    
-				                                    tracing::info!("Scanning filesystem at: {} (parent pos: {:.0}, {:.0})", mount_point, parent_x, parent_y);
-				                                    match crate::ui::graph_store::scan_directory(
-				                                        &db_clone,
-				                                        &node_id_clone,
-				                                        &mount_point,
-				                                        parent_x,
-				                                        parent_y,
-				                                    ).await
-				                                    {
-				                                        Ok(nodes) => {
-				                                            let count = nodes.len();
-				                                            graph_for_success.with_mut(|g| {
-				                                                g.complete_filesystem_scan(&node_id_for_scan, nodes);
-				                                            });
-				                                            tracing::info!("Scan complete: added {} nodes", count);
-				                                        }
-				                                        Err(e) => {
-				                                            error!("Filesystem scan failed: {}", e);
-				                                            graph_for_error.with_mut(|g| {
-				                                                g.clear_scan_status();
-				                                            });
-				                                        }
-				                                    }
-				                                });
-				                            } else {
-				                                graph_signal
-				                                    .with_mut(|g| {
-				                                        g.toggle_expand(&node_id);
-				                                    });
-				                            }
-				                        }
-				                    }
-				                }
-				                graph
-				                    .with_mut(|g| {
-				                        g.drag_state = crate::ui::graph_store::DragState::None;
-				                    });
-				            }
-				            crate::ui::graph_store::DragState::Dragging { node_id, .. } => {
-				                // Release the node and restart simulation
-				                graph
-				                    .with_mut(|g| {
-				                        g.release_node_position(&node_id);
-				                        g.start_simulation(); // Restart to let node settle
-				                    });
+							crate::ui::graph_store::DragState::CreatingEdge { source_id: _, .. } => {}
+							crate::ui::graph_store::DragState::Lasso {
+								start_x,
+								start_y,
+								current_x,
+								current_y,
+							} => {
+								let min_x = start_x.min(current_x);
+								let max_x = start_x.max(current_x);
+								let min_y = start_y.min(current_y);
+								let max_y = start_y.max(current_y);
+								graph
+									.with_mut(|g| {
+										g.select_in_rect(min_x, min_y, max_x, max_y);
+										g.drag_state = crate::ui::graph_store::DragState::None;
+									});
+							}
+							crate::ui::graph_store::DragState::ClickPending {
+								node_id,
+								start_x,
+								start_y,
+								mouse_x,
+								mouse_y,
+							} => {
+								let distance_moved = ((mouse_x - start_x).powi(2)
+									+ (mouse_y - start_y).powi(2))
+									.sqrt();
+								tracing::info!(
 
-				                // Save position to DB
-				                if let Some(node) = graph().find_node(&node_id) {
-				                    let db_clone = db.clone();
-				                    let node_id_clone = node_id.clone();
-				                    let x = node.position.x;
-				                    let y = node.position.y;
-				                    spawn(async move {
-				                        if let Err(e) = crate::ui::graph_store::save_node_position(
-				                                &db_clone,
-				                                &node_id_clone,
-				                                x,
-				                                y,
-				                            )
-				                            .await
-				                        {
-				                            error!("Failed to save node position: {}", e);
-				                        }
-				                    });
-				                }
-				                graph
-				                    .with_mut(|g| {
-				                        g.drag_state = crate::ui::graph_store::DragState::None;
-				                    });
-				            }
-				            _ => {
-				                graph
-				                    .with_mut(|g| {
-				                        g.drag_state = crate::ui::graph_store::DragState::None;
-				                    });
-				            }
-				        }
-				    }
+									// Start filesystem scan for Machine/Drive nodes
+
+									// Get mount point from containers
+
+									// Scan filesystem asynchronously
+									// Get parent node position for orbit placement
+
+									// Release the node and restart simulation
+
+									// Save position to DB
+									"ClickPending: node={}, distance_moved={:.2}", node_id,
+									distance_moved
+								);
+								if distance_moved < 5.0 {
+									let node_info = graph()
+										.find_node(&node_id)
+										.map(|n| (n.kind.clone(), n.path.clone(), n.label.clone()));
+									if let Some((kind, path, label)) = node_info {
+										tracing::info!(
+											"Click on node {}: kind={:?}, expandable={}", node_id, kind,
+											kind.is_expandable()
+										);
+										if kind.is_expandable() {
+											tracing::info!("*** EXPANDING NODE {} ***", node_id);
+											let db_clone = db.clone();
+											let node_id_clone = node_id.clone();
+											let label_clone = label.clone();
+											let path_clone = path.clone();
+											let mut graph_signal = graph;
+											let is_machine_or_drive = matches!(
+												&kind,
+												crate::ui::graph_types::NodeKind::Machine { .. }
+												| crate::ui::graph_types::NodeKind::Drive { .. }
+											);
+											if is_machine_or_drive && path.is_empty() {
+												let mount_point = graph_signal()
+													.containers
+													.iter()
+													.find(|c| {
+														crate::ui::graph_store::rid_string(&c.id) == node_id
+													})
+													.and_then(|c| c.mount_point.clone());
+												graph_signal
+													.with_mut(|g| {
+														g.start_filesystem_scan(
+															&node_id,
+															&label,
+															mount_point.as_deref(),
+														);
+														g.toggle_expand(&node_id);
+													});
+												let mount_point = mount_point
+													.unwrap_or_else(|| "/".to_string());
+												let mut graph_for_success = graph_signal;
+												let mut graph_for_error = graph_signal;
+												let node_id_for_scan = node_id.clone();
+												let graph_for_pos = graph_signal;
+												let node_id_for_pos = node_id.clone();
+												spawn(async move {
+													let (parent_x, parent_y) = graph_for_pos
+														.with(|g| {
+															g.find_node(&node_id_for_pos)
+																.map(|n| (n.position.x, n.position.y))
+																.unwrap_or((600.0, 400.0))
+														});
+													tracing::info!(
+														"Scanning filesystem at: {} (parent pos: {:.0}, {:.0})",
+														mount_point, parent_x, parent_y
+													);
+													match crate::ui::graph_store::scan_directory(
+															&db_clone,
+															&node_id_clone,
+															&mount_point,
+															parent_x,
+															parent_y,
+														)
+														.await
+													{
+														Ok(nodes) => {
+															let count = nodes.len();
+															graph_for_success
+																.with_mut(|g| {
+																	g.complete_filesystem_scan(&node_id_for_scan, nodes);
+																});
+															tracing::info!("Scan complete: added {} nodes", count);
+														}
+														Err(e) => {
+															error!("Filesystem scan failed: {}", e);
+															graph_for_error
+																.with_mut(|g| {
+																	g.clear_scan_status();
+																});
+														}
+													}
+												});
+											} else {
+												graph_signal
+													.with_mut(|g| {
+														g.toggle_expand(&node_id);
+													});
+											}
+										}
+									}
+								}
+								graph
+									.with_mut(|g| {
+										g.drag_state = crate::ui::graph_store::DragState::None;
+									});
+							}
+							crate::ui::graph_store::DragState::Dragging { node_id, .. } => {
+								graph
+									.with_mut(|g| {
+										g.release_node_position(&node_id);
+										g.start_simulation();
+									});
+								if let Some(node) = graph().find_node(&node_id) {
+									let db_clone = db.clone();
+									let node_id_clone = node_id.clone();
+									let x = node.position.x;
+									let y = node.position.y;
+									spawn(async move {
+										if let Err(e) = crate::ui::graph_store::save_node_position(
+												&db_clone,
+												&node_id_clone,
+												x,
+												y,
+											)
+											.await
+										{
+											error!("Failed to save node position: {}", e);
+										}
+									});
+								}
+								graph
+									.with_mut(|g| {
+										g.drag_state = crate::ui::graph_store::DragState::None;
+									});
+							}
+							_ => {
+								graph
+									.with_mut(|g| {
+										g.drag_state = crate::ui::graph_store::DragState::None;
+									});
+							}
+						}
+					}
 				},
 
 				// SVG overlay for edges and interactions with viewport transform
 				{
-					let (scale, x, y) = graph.with(|g| (g.viewport_scale, g.viewport_x, g.viewport_y));
+					let (scale, x, y) = graph
+						// tracing::info!("DEBUG: Rendering {} visible nodes, viewport=({},{}) scale={}", visible_count, x, y, scale);
+						// Render visible nodes with viewport
+						.with(|g| (g.viewport_scale, g.viewport_x, g.viewport_y));
 					let visible_count = graph().visible_nodes().len();
-					// tracing::info!("DEBUG: Rendering {} visible nodes, viewport=({},{}) scale={}", visible_count, x, y, scale);
 					rsx! {
-						div {
-							style: "transform: translate({x}px, {y}px) scale({scale}); transform-origin: 0 0; width: 100%; height: 100%; position: relative;",
-							GraphSvgOverlay { 
-								graph, 
-								canvas_width: 2000.0, 
-								canvas_height: 2000.0,
-								viewport_scale: scale,
-								viewport_x: x,
-								viewport_y: y,
-							}
-							// Render visible nodes with viewport
-							for node in graph().visible_nodes().iter() {
-								GraphNodeComponent { graph, node: (*node).clone() }
-							}
+					div { style: "transform: translate({x}px, {y}px) scale({scale}); transform-origin: 0 0; width: 100%; height: 100%; position: relative;",
+						GraphSvgOverlay {
+							graph,
+							canvas_width: 2000.0,
+							canvas_height: 2000.0,
+							viewport_scale: scale,
+							viewport_x: x,
+							viewport_y: y,
+						}
+						for node in graph().visible_nodes().iter() {
+							GraphNodeComponent { graph, node: (*node).clone() }
 						}
 					}
+				}
 				}
 			}
 
@@ -586,32 +615,32 @@ pub fn MappingGraph(
 									class: "btn-primary",
 									disabled: machine_host().trim().is_empty(),
 									onclick: {
-									    let db = db.clone();
-									    move |_| {
-									        let name = machine_name().trim().to_string();
-									        let host = machine_host().trim().to_string();
-									        let user = machine_user().trim().to_string();
-									        let db = db.clone();
-									        let on_changed = on_changed;
-									        let mut add_panel = add_panel;
-									        spawn(async move {
-									            match crate::ui::graph_store::add_remote_machine(
-									                    &db,
-									                    &name,
-									                    &host,
-									                    &user,
-									                )
-									                .await
-									            {
-									                Ok(()) => {
-									                    info!("remote machine added: {}", host);
-									                    on_changed.call(());
-									                }
-									                Err(e) => error!("add machine failed: {}", e),
-									            }
-									            *add_panel.write() = AddPanelState::Closed;
-									        });
-									    }
+										let db = db.clone();
+										move |_| {
+											let name = machine_name().trim().to_string();
+											let host = machine_host().trim().to_string();
+											let user = machine_user().trim().to_string();
+											let db = db.clone();
+											let on_changed = on_changed;
+											let mut add_panel = add_panel;
+											spawn(async move {
+												match crate::ui::graph_store::add_remote_machine(
+														&db,
+														&name,
+														&host,
+														&user,
+													)
+													.await
+												{
+													Ok(()) => {
+														info!("remote machine added: {}", host);
+														on_changed.call(());
+													}
+													Err(e) => error!("add machine failed: {}", e),
+												}
+												*add_panel.write() = AddPanelState::Closed;
+											});
+										}
 									},
 									"Add"
 								}

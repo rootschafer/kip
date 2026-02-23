@@ -77,10 +77,7 @@ impl NodeKind {
 	pub fn is_expandable(&self) -> bool {
 		matches!(
 			self,
-			NodeKind::Directory { .. }
-				| NodeKind::Group { .. }
-				| NodeKind::Machine { .. }
-				| NodeKind::Drive { .. }
+			NodeKind::Directory { .. } | NodeKind::Group { .. } | NodeKind::Machine { .. } | NodeKind::Drive { .. }
 		)
 	}
 

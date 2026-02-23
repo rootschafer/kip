@@ -5,9 +5,9 @@ pub mod api;
 #[cfg(feature = "desktop")]
 pub mod db;
 #[cfg(feature = "desktop")]
-pub mod engine;
-#[cfg(feature = "desktop")]
 pub mod devices;
+#[cfg(feature = "desktop")]
+pub mod engine;
 #[cfg(feature = "desktop")]
 pub mod models;
 #[cfg(feature = "desktop")]

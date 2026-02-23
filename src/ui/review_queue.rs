@@ -43,24 +43,24 @@ pub fn ReviewQueue(refresh_tick: u32, on_resolved: EventHandler) -> Element {
 
 	rsx! {
 		match &*items.read() {
-		    Some(Ok(list)) if list.is_empty() => {
-		        rsx! {}
-		    }
-		    Some(Ok(list)) => {
-		        rsx! {
+			Some(Ok(list)) if list.is_empty() => {
+				rsx! {}
+			}
+			Some(Ok(list)) => {
+				rsx! {
 			div { class: "section-title mt-24", "Review Queue ({list.len()})" }
 			for item in list.iter() {
 				ReviewCard { key: "{item.id:?}", item: item.clone(), on_resolved }
 			}
 		}
-		    }
-		    Some(Err(e)) => {
-		        error!("review queue load failed: {}", e);
-		        rsx! {}
-		    }
-		    None => {
-		        rsx! {}
-		    }
+			}
+			Some(Err(e)) => {
+				error!("review queue load failed: {}", e);
+				rsx! {}
+			}
+			None => {
+				rsx! {}
+			}
 		}
 	}
 }
@@ -106,33 +106,33 @@ fn ReviewCard(item: ReviewView, on_resolved: EventHandler) -> Element {
 			div { class: "review-actions",
 				for option in item.options.iter() {
 					{
-					    let opt = option.clone();
-					    let item_id = item.id.clone();
-					    let job_id = item.job.clone();
-					    let db = db.clone();
-					    let on_resolved = on_resolved;
+						let opt = option.clone();
+						let item_id = item.id.clone();
+						let job_id = item.job.clone();
+						let db = db.clone();
+						let on_resolved = on_resolved;
 
-					    let btn_class = match opt.as_str() {
-					        "retry" | "rescan" => "btn-resolve btn-resolve-retry",
-					        "accept" => "btn-resolve btn-resolve-accept",
-					        _ => "btn-resolve btn-resolve-skip",
-					    };
+						let btn_class = match opt.as_str() {
+							"retry" | "rescan" => "btn-resolve btn-resolve-retry",
+							"accept" => "btn-resolve btn-resolve-accept",
+							_ => "btn-resolve btn-resolve-skip",
+						};
 
-					    rsx! {
+						rsx! {
 						button {
 							class: "{btn_class}",
 							disabled: resolving(),
 							onclick: move |_| {
-							    *resolving.write() = true;
-							    let db = db.clone();
-							    let item_id = item_id.clone();
-							    let job_id = job_id.clone();
-							    let opt = opt.clone();
-							    let on_resolved = on_resolved;
-							    spawn(async move {
-							        let _ = resolve_item(&db, &item_id, &job_id, &opt).await;
-							        on_resolved.call(());
-							    });
+								*resolving.write() = true;
+								let db = db.clone();
+								let item_id = item_id.clone();
+								let job_id = job_id.clone();
+								let opt = opt.clone();
+								let on_resolved = on_resolved;
+								spawn(async move {
+									let _ = resolve_item(&db, &item_id, &job_id, &opt).await;
+									on_resolved.call(());
+								});
 							},
 							"{opt}"
 						}

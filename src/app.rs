@@ -49,7 +49,11 @@ pub fn App() -> Element {
 	use_effect(move || {
 		let db_clone = db_for_hostname.clone();
 		spawn(async move {
-			let mut response = db_clone.db.query("SELECT name FROM machine:local").await.unwrap();
+			let mut response = db_clone
+				.db
+				.query("SELECT name FROM machine:local")
+				.await
+				.unwrap();
 			let result: Option<String> = response.take("name").unwrap_or(None);
 			if let Some(name) = result {
 				*hostname.write() = name;
