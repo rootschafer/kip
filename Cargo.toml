@@ -4,28 +4,68 @@ version = "0.1.0"
 authors = ["Anders <git@anders.place>"]
 edition = "2021"
 
+[workspace]
+members = [
+    "crates/actix-dioxus-serve",
+]
+
 [dependencies]
-dioxus = { version = "0.7.3", features = ["desktop", "router", "signals"] }
-surrealdb = { version = "=3.0.0-beta.3", features = ["kv-surrealkv"] }
-surrealdb-types = "=3.0.0-beta.4"
-tokio = { version = "1", features = ["full"] }
+# GUI - desktop and web features are mutually exclusive
+dioxus = { version = "0.7.3", features = ["router", "signals"] }
+# CLI
+clap = { version = "4.4", features = ["derive"] }
+# Database - desktop only
+surrealdb = { version = "3.0.0", features = ["kv-surrealkv"], optional = true }
+surrealdb-types = { version = "3.0.0", optional = true }
+# Async - different for web vs desktop
+tokio = { version = "1", features = ["full"], optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+# Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = { version = "0.4", features = ["serde"] }
-walkdir = "2"
+# Utilities
+walkdir = { version = "2", optional = true }
 thiserror = "2"
-blake3 = "1"
+blake3 = { version = "1", optional = true }
 plist = "1"
-rfd = "0.15"
+rfd = { version = "0.15", optional = true }
 tracing = "0.1"
 tracing-subscriber = "0.3.22"
-tracing-appender = "0.2.4"
+tracing-appender = { version = "0.2.4", optional = true }
+# Config
+toml = "0.8"
+dirs = { version = "5.0", optional = true }
+ulid = { version = "1.1", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
 
 [features]
 default = ["desktop", "safe_mode"]
-# default = ["desktop"]
-desktop = ["dioxus/desktop"]
+desktop = ["dioxus/desktop", "surrealdb", "surrealdb-types", "tokio", "rfd", "tracing-appender", "walkdir", "blake3", "dirs", "ulid"]
+web = ["dioxus/web", "wasm-bindgen-futures"]
 safe_mode = []
+backend = ["actix-web", "actix-files", "actix-web-flash-messages", "actix-dioxus-serve"]
+
+# Web backend binary
+[[bin]]
+name = "kip-backend"
+path = "src/bin/backend.rs"
+required-features = ["backend"]
+
+[dependencies.actix-web]
+version = "4"
+optional = true
+
+[dependencies.actix-files]
+version = "0.6"
+optional = true
+
+[dependencies.actix-web-flash-messages]
+version = "0.5"
+optional = true
+
+[dependencies.actix-dioxus-serve]
+path = "./crates/actix-dioxus-serve"
+optional = true

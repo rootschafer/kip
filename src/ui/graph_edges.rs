@@ -25,15 +25,6 @@ pub fn GraphSvgOverlay(
 		.map(|node| (node.id.clone(), node.center_x(), node.center_y()))
 		.collect();
 
-	// Calculate cluster centers and radii for machine/drive nodes
-	let clusters: Vec<(String, f64, f64, &str)> = graph_snapshot
-		.visible_nodes()
-		.iter()
-		.filter(|n| matches!(n.kind, NodeKind::Machine { .. } | NodeKind::Drive { .. }))
-		.map(|n| {
-			(n.id.clone(), n.center_x(), n.center_y(), n.color.as_str())
-		})
-		.collect();
 
 	// Pre-compute lasso rect
 	let (lasso_active, lasso_x, lasso_y, lasso_w, lasso_h) = {
@@ -69,17 +60,7 @@ pub fn GraphSvgOverlay(
 			height: "{canvas_height}",
 			style: "width: {canvas_width}px; height: {canvas_height}px;",
 
-			// Render cluster backgrounds for machines/drives
-			for (cluster_id, cx, cy, color) in clusters.iter() {
-				circle {
-					key: "cluster_{cluster_id}",
-					cx: "{cx}",
-					cy: "{cy}",
-					r: "350",
-					fill: "{color}",
-					opacity: "0.08",
-				}
-			}
+			// Cluster backgrounds removed
 
 			// Render all visible edges
 			for edge in visible_edges.iter() {

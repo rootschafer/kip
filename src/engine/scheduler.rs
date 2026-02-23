@@ -4,7 +4,7 @@ use surrealdb::types::RecordId;
 use thiserror::Error;
 use tokio::sync::Semaphore;
 
-use crate::{db::DbHandle, engine::copier};
+use crate::{db::DbHandle, engine::transfer};
 
 const MAX_CONCURRENCY: usize = 4;
 
@@ -73,7 +73,7 @@ pub async fn run_intent(db: &DbHandle, intent_id: &RecordId) -> Result<RunResult
 			let db = db.clone();
 
 			handles.push(tokio::spawn(async move {
-				let result = copier::copy_job(&db, &job_id).await;
+				let result = transfer::copy_job(&db, &job_id).await;
 				drop(permit);
 				(job_id, result)
 			}));
@@ -87,7 +87,7 @@ pub async fn run_intent(db: &DbHandle, intent_id: &RecordId) -> Result<RunResult
 		}
 
 		// After batch completes, loop back to check for any jobs that
-		// were retried (set back to 'pending' by the copier)
+		// were retried (set back to 'pending' by the transfer engine)
 	}
 
 	// All jobs processed — compute final counts and update intent

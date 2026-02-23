@@ -5,45 +5,26 @@ use crate::ui::{
 	graph_types::*,
 };
 
-// ─── Helper: Get workspace-relative coordinates ───────────────
-
-fn get_workspace_coords(e: &MouseEvent) -> (f64, f64) {
-	// Use client coordinates and subtract header offset
-	// Header height: ~61px (padding 16+16 + font 17 + border 1 + spacing)
-	let client_coords = e.client_coordinates();
-	(client_coords.x, client_coords.y - 61.0)
-}
-
 // ─── GraphNodeComponent ────────────────────────────────────────
-// Main dispatcher that renders the appropriate node component based on NodeKind
 
 #[component]
 pub fn GraphNodeComponent(graph: Signal<Graph>, node: GraphNode) -> Element {
 	match &node.kind {
-		NodeKind::File => rsx! {
-			FileNode { graph, node }
-		},
-		NodeKind::Directory { .. } => rsx! {
-			DirNode { graph, node }
-		},
-		NodeKind::Group { .. } => rsx! {
-			GroupNode { graph, node }
-		},
-		NodeKind::Machine { .. } => rsx! {
-			MachineNode { graph, node }
-		},
-		NodeKind::Drive { .. } => rsx! {
-			DriveNode { graph, node }
-		},
+		NodeKind::File => rsx! { FileNode { graph, node } },
+		NodeKind::Directory { .. } => rsx! { DirNode { graph, node } },
+		NodeKind::Group { .. } => rsx! { GroupNode { graph, node } },
+		NodeKind::Machine { .. } => rsx! { MachineNode { graph, node } },
+		NodeKind::Drive { .. } => rsx! { DriveNode { graph, node } },
 	}
 }
 
 // ─── FileNode ──────────────────────────────────────────────────
-// Pill-shaped node for files
 
 #[component]
 pub fn FileNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 	let node_id = node.id.clone();
+	let node_id_mousedown = node_id.clone();
+	let node_id_mouseup = node_id.clone();
 	let label = node.label.clone();
 	let color = node.color.clone();
 	let x = node.position.x;
@@ -52,57 +33,66 @@ pub fn FileNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 	let height = node.height;
 	let is_selected = graph().selected.contains(&node_id);
 
-	let class = if is_selected {
-		"graph-node file-node selected"
-	} else {
-		"graph-node file-node"
-	};
+	let class = if is_selected { "graph-node file-node selected" } else { "graph-node file-node" };
 
 	rsx! {
 		div {
 			class: "{class}",
-			style: "
-                left: {x}px;
-                top: {y}px;
-                width: {width}px;
-                height: {height}px;
-                --node-color: {color};
-            ",
+			style: "left: {x}px; top: {y}px; width: {width}px; height: {height}px; --node-color: {color};",
 			onmousedown: move |e: MouseEvent| {
-			    e.stop_propagation();
-
-			    let (mx, my) = get_workspace_coords(&e);
-
-			    if e.modifiers().shift() {
-			        // Toggle selection
-			        graph.with_mut(|g| g.toggle_select(&node_id));
-			    } else if e.modifiers().ctrl() || e.modifiers().alt() {
-			        // Start edge creation
-			        let center_x = x + width / 2.0;
-			        let center_y = y + height / 2.0;
-
-			        graph
-			            .with_mut(|g| {
-			                g.drag_state = DragState::CreatingEdge {
-			                    source_id: node_id.clone(),
-			                    source_x: center_x,
-			                    source_y: center_y,
-			                    mouse_x: mx,
-			                    mouse_y: my,
-			                };
-			            });
-			    } else {
-			        graph
-			            .with_mut(|g| {
-			                g.drag_state = DragState::ClickPending {
-			                    node_id: node_id.clone(),
-			                    start_x: mx,
-			                    start_y: my,
-			                    mouse_x: mx,
-			                    mouse_y: my,
-			                };
-			            });
-			    }
+				e.stop_propagation();
+				let coords = e.client_coordinates();
+				let (screen_x, screen_y) = (coords.x, coords.y);
+				let (viewport_x, viewport_y, viewport_scale) = graph.with(|g| (g.viewport_x, g.viewport_y, g.viewport_scale));
+				let mx = (screen_x - viewport_x) / viewport_scale;
+				let my = (screen_y - 61.0 - viewport_y) / viewport_scale;
+				let node_id_for_drag = node_id_mousedown.clone();
+				if e.modifiers().shift() {
+					graph.with_mut(|g| g.toggle_select(&node_id_for_drag));
+				} else if e.modifiers().ctrl() || e.modifiers().alt() {
+					let center_x = x + width / 2.0;
+					let center_y = y + height / 2.0;
+					graph.with_mut(|g| {
+						g.drag_state = DragState::CreatingEdge {
+							source_id: node_id_for_drag.clone(),
+							source_x: center_x,
+							source_y: center_y,
+							mouse_x: mx,
+							mouse_y: my,
+						};
+					});
+				} else {
+					graph.with_mut(|g| {
+						g.drag_state = DragState::ClickPending {
+							node_id: node_id_for_drag.clone(),
+							start_x: mx,
+							start_y: my,
+							mouse_x: mx,
+							mouse_y: my,
+						};
+					});
+				}
+			},
+			onmouseup: move |e: MouseEvent| {
+				e.stop_propagation();
+				let drag_state = graph().drag_state.clone();
+				match &drag_state {
+					DragState::CreatingEdge { source_id, .. } => {
+						if source_id != &node_id_mouseup {
+							// Edge creation handled in graph.rs workspace onmouseup
+						}
+					}
+					DragState::Dragging { .. } => {
+						// Release the node - handled by workspace, but we need to reset drag state
+						graph.with_mut(|g| {
+							g.release_node_position(&node_id_mouseup);
+							g.release_selected_nodes();
+							g.start_simulation();
+							g.drag_state = DragState::None;
+						});
+					}
+					_ => {}
+				}
 			},
 			span { class: "node-label", "{label}" }
 		}
@@ -110,11 +100,12 @@ pub fn FileNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 }
 
 // ─── DirNode ───────────────────────────────────────────────────
-// Circle-shaped node for directories
 
 #[component]
 pub fn DirNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 	let node_id = node.id.clone();
+	let node_id_mousedown = node_id.clone();
+	let node_id_mouseup = node_id.clone();
 	let label = node.label.clone();
 	let color = node.color.clone();
 	let x = node.position.x;
@@ -124,58 +115,65 @@ pub fn DirNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 	let is_selected = graph().selected.contains(&node_id);
 	let is_expanded = node.kind.is_expanded();
 
-	let class = if is_selected {
-		"graph-node dir-node selected"
-	} else {
-		"graph-node dir-node"
-	};
+	let class = if is_selected { "graph-node dir-node selected" } else { "graph-node dir-node" };
 
 	rsx! {
 		div {
 			class: "{class}",
-			style: "
-                left: {x}px;
-                top: {y}px;
-                width: {width}px;
-                height: {height}px;
-                --node-color: {color};
-            ",
+			style: "left: {x}px; top: {y}px; width: {width}px; height: {height}px; --node-color: {color};",
 			onmousedown: move |e: MouseEvent| {
-			    e.stop_propagation();
-
-			    let (mx, my) = get_workspace_coords(&e);
-			    tracing::info!("*** DIR NODE CLICK: {} at ({:.1}, {:.1}) ***", label, mx, my);
-
-			    if e.modifiers().shift() {
-			        // Toggle selection
-			        graph.with_mut(|g| g.toggle_select(&node_id));
-			    } else if e.modifiers().ctrl() || e.modifiers().alt() {
-			        // Start edge creation
-			        let center_x = x + width / 2.0;
-			        let center_y = y + height / 2.0;
-
-			        graph
-			            .with_mut(|g| {
-			                g.drag_state = DragState::CreatingEdge {
-			                    source_id: node_id.clone(),
-			                    source_x: center_x,
-			                    source_y: center_y,
-			                    mouse_x: mx,
-			                    mouse_y: my,
-			                };
-			            });
-			    } else {
-			        graph
-			            .with_mut(|g| {
-			                g.drag_state = DragState::ClickPending {
-			                    node_id: node_id.clone(),
-			                    start_x: mx,
-			                    start_y: my,
-			                    mouse_x: mx,
-			                    mouse_y: my,
-			                };
-			            });
-			    }
+				e.stop_propagation();
+				let coords = e.client_coordinates();
+				let (screen_x, screen_y) = (coords.x, coords.y);
+				let (viewport_x, viewport_y, viewport_scale) = graph.with(|g| (g.viewport_x, g.viewport_y, g.viewport_scale));
+				let mx = (screen_x - viewport_x) / viewport_scale;
+				let my = (screen_y - 61.0 - viewport_y) / viewport_scale;
+				let node_id_for_drag = node_id_mousedown.clone();
+				if e.modifiers().shift() {
+					graph.with_mut(|g| g.toggle_select(&node_id_for_drag));
+				} else if e.modifiers().ctrl() || e.modifiers().alt() {
+					let center_x = x + width / 2.0;
+					let center_y = y + height / 2.0;
+					graph.with_mut(|g| {
+						g.drag_state = DragState::CreatingEdge {
+							source_id: node_id_for_drag.clone(),
+							source_x: center_x,
+							source_y: center_y,
+							mouse_x: mx,
+							mouse_y: my,
+						};
+					});
+				} else {
+					graph.with_mut(|g| {
+						g.drag_state = DragState::ClickPending {
+							node_id: node_id_for_drag.clone(),
+							start_x: mx,
+							start_y: my,
+							mouse_x: mx,
+							mouse_y: my,
+						};
+					});
+				}
+			},
+			onmouseup: move |e: MouseEvent| {
+				e.stop_propagation();
+				let drag_state = graph().drag_state.clone();
+				match &drag_state {
+					DragState::CreatingEdge { source_id, .. } => {
+						if source_id != &node_id_mouseup {
+							// Edge creation handled in graph.rs workspace onmouseup
+						}
+					}
+					DragState::Dragging { .. } => {
+						graph.with_mut(|g| {
+							g.release_node_position(&node_id_mouseup);
+							g.release_selected_nodes();
+							g.start_simulation();
+							g.drag_state = DragState::None;
+						});
+					}
+					_ => {}
+				}
 			},
 			div { class: "node-content",
 				span { class: "node-label", "{label}" }
@@ -190,11 +188,12 @@ pub fn DirNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 }
 
 // ─── GroupNode ─────────────────────────────────────────────────
-// Circle-shaped node for groups
 
 #[component]
 pub fn GroupNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 	let node_id = node.id.clone();
+	let node_id_mousedown = node_id.clone();
+	let node_id_mouseup = node_id.clone();
 	let label = node.label.clone();
 	let color = node.color.clone();
 	let x = node.position.x;
@@ -203,57 +202,65 @@ pub fn GroupNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 	let height = node.height;
 	let is_selected = graph().selected.contains(&node_id);
 
-	let class = if is_selected {
-		"graph-node group-node selected"
-	} else {
-		"graph-node group-node"
-	};
+	let class = if is_selected { "graph-node group-node selected" } else { "graph-node group-node" };
 
 	rsx! {
 		div {
 			class: "{class}",
-			style: "
-                left: {x}px; 
-                top: {y}px; 
-                width: {width}px; 
-                height: {height}px; 
-                --node-color: {color};
-            ",
+			style: "left: {x}px; top: {y}px; width: {width}px; height: {height}px; --node-color: {color};",
 			onmousedown: move |e: MouseEvent| {
-			    e.stop_propagation();
-
-			    let (mx, my) = get_workspace_coords(&e);
-
-			    if e.modifiers().shift() {
-			        // Toggle selection
-			        graph.with_mut(|g| g.toggle_select(&node_id));
-			    } else if e.modifiers().ctrl() || e.modifiers().alt() {
-			        // Start edge creation
-			        let center_x = x + width / 2.0;
-			        let center_y = y + height / 2.0;
-
-			        graph
-			            .with_mut(|g| {
-			                g.drag_state = DragState::CreatingEdge {
-			                    source_id: node_id.clone(),
-			                    source_x: center_x,
-			                    source_y: center_y,
-			                    mouse_x: mx,
-			                    mouse_y: my,
-			                };
-			            });
-			    } else {
-			        graph
-			            .with_mut(|g| {
-			                g.drag_state = DragState::ClickPending {
-			                    node_id: node_id.clone(),
-			                    start_x: mx,
-			                    start_y: my,
-			                    mouse_x: mx,
-			                    mouse_y: my,
-			                };
-			            });
-			    }
+				e.stop_propagation();
+				let coords = e.client_coordinates();
+				let (screen_x, screen_y) = (coords.x, coords.y);
+				let (viewport_x, viewport_y, viewport_scale) = graph.with(|g| (g.viewport_x, g.viewport_y, g.viewport_scale));
+				let mx = (screen_x - viewport_x) / viewport_scale;
+				let my = (screen_y - 61.0 - viewport_y) / viewport_scale;
+				let node_id_for_drag = node_id_mousedown.clone();
+				if e.modifiers().shift() {
+					graph.with_mut(|g| g.toggle_select(&node_id_for_drag));
+				} else if e.modifiers().ctrl() || e.modifiers().alt() {
+					let center_x = x + width / 2.0;
+					let center_y = y + height / 2.0;
+					graph.with_mut(|g| {
+						g.drag_state = DragState::CreatingEdge {
+							source_id: node_id_for_drag.clone(),
+							source_x: center_x,
+							source_y: center_y,
+							mouse_x: mx,
+							mouse_y: my,
+						};
+					});
+				} else {
+					graph.with_mut(|g| {
+						g.drag_state = DragState::ClickPending {
+							node_id: node_id_for_drag.clone(),
+							start_x: mx,
+							start_y: my,
+							mouse_x: mx,
+							mouse_y: my,
+						};
+					});
+				}
+			},
+			onmouseup: move |e: MouseEvent| {
+				e.stop_propagation();
+				let drag_state = graph().drag_state.clone();
+				match &drag_state {
+					DragState::CreatingEdge { source_id, .. } => {
+						if source_id != &node_id_mouseup {
+							// Edge creation handled in graph.rs workspace onmouseup
+						}
+					}
+					DragState::Dragging { .. } => {
+						graph.with_mut(|g| {
+							g.release_node_position(&node_id_mouseup);
+							g.release_selected_nodes();
+							g.start_simulation();
+							g.drag_state = DragState::None;
+						});
+					}
+					_ => {}
+				}
 			},
 			div { class: "node-content",
 				span { class: "node-label", "{label}" }
@@ -263,11 +270,12 @@ pub fn GroupNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 }
 
 // ─── MachineNode ───────────────────────────────────────────────
-// Circle-shaped node for machines
 
 #[component]
 pub fn MachineNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 	let node_id = node.id.clone();
+	let node_id_mousedown = node_id.clone();
+	let node_id_mouseup = node_id.clone();
 	let label = node.label.clone();
 	let color = node.color.clone();
 	let x = node.position.x;
@@ -276,57 +284,65 @@ pub fn MachineNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 	let height = node.height;
 	let is_selected = graph().selected.contains(&node_id);
 
-	let class = if is_selected {
-		"graph-node machine-node selected"
-	} else {
-		"graph-node machine-node"
-	};
+	let class = if is_selected { "graph-node machine-node selected" } else { "graph-node machine-node" };
 
 	rsx! {
 		div {
 			class: "{class}",
-			style: "
-                left: {x}px; 
-                top: {y}px; 
-                width: {width}px; 
-                height: {height}px; 
-                --node-color: {color};
-            ",
+			style: "left: {x}px; top: {y}px; width: {width}px; height: {height}px; --node-color: {color};",
 			onmousedown: move |e: MouseEvent| {
-			    e.stop_propagation();
-
-			    let (mx, my) = get_workspace_coords(&e);
-
-			    if e.modifiers().shift() {
-			        // Toggle selection
-			        graph.with_mut(|g| g.toggle_select(&node_id));
-			    } else if e.modifiers().ctrl() || e.modifiers().alt() {
-			        // Start edge creation
-			        let center_x = x + width / 2.0;
-			        let center_y = y + height / 2.0;
-
-			        graph
-			            .with_mut(|g| {
-			                g.drag_state = DragState::CreatingEdge {
-			                    source_id: node_id.clone(),
-			                    source_x: center_x,
-			                    source_y: center_y,
-			                    mouse_x: mx,
-			                    mouse_y: my,
-			                };
-			            });
-			    } else {
-			        graph
-			            .with_mut(|g| {
-			                g.drag_state = DragState::ClickPending {
-			                    node_id: node_id.clone(),
-			                    start_x: mx,
-			                    start_y: my,
-			                    mouse_x: mx,
-			                    mouse_y: my,
-			                };
-			            });
-			    }
+				e.stop_propagation();
+				let coords = e.client_coordinates();
+				let (screen_x, screen_y) = (coords.x, coords.y);
+				let (viewport_x, viewport_y, viewport_scale) = graph.with(|g| (g.viewport_x, g.viewport_y, g.viewport_scale));
+				let mx = (screen_x - viewport_x) / viewport_scale;
+				let my = (screen_y - 61.0 - viewport_y) / viewport_scale;
+				let node_id_for_drag = node_id_mousedown.clone();
+				if e.modifiers().shift() {
+					graph.with_mut(|g| g.toggle_select(&node_id_for_drag));
+				} else if e.modifiers().ctrl() || e.modifiers().alt() {
+					let center_x = x + width / 2.0;
+					let center_y = y + height / 2.0;
+					graph.with_mut(|g| {
+						g.drag_state = DragState::CreatingEdge {
+							source_id: node_id_for_drag.clone(),
+							source_x: center_x,
+							source_y: center_y,
+							mouse_x: mx,
+							mouse_y: my,
+						};
+					});
+				} else {
+					graph.with_mut(|g| {
+						g.drag_state = DragState::ClickPending {
+							node_id: node_id_for_drag.clone(),
+							start_x: mx,
+							start_y: my,
+							mouse_x: mx,
+							mouse_y: my,
+						};
+					});
+				}
+			},
+			onmouseup: move |e: MouseEvent| {
+				e.stop_propagation();
+				let drag_state = graph().drag_state.clone();
+				match &drag_state {
+					DragState::CreatingEdge { source_id, .. } => {
+						if source_id != &node_id_mouseup {
+							// Edge creation handled in graph.rs workspace onmouseup
+						}
+					}
+					DragState::Dragging { .. } => {
+						graph.with_mut(|g| {
+							g.release_node_position(&node_id_mouseup);
+							g.release_selected_nodes();
+							g.start_simulation();
+							g.drag_state = DragState::None;
+						});
+					}
+					_ => {}
+				}
 			},
 			div { class: "node-content",
 				span { class: "node-label", "{label}" }
@@ -336,11 +352,12 @@ pub fn MachineNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 }
 
 // ─── DriveNode ─────────────────────────────────────────────────
-// Circle-shaped node for drives
 
 #[component]
 pub fn DriveNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 	let node_id = node.id.clone();
+	let node_id_mousedown = node_id.clone();
+	let node_id_mouseup = node_id.clone();
 	let label = node.label.clone();
 	let color = node.color.clone();
 	let x = node.position.x;
@@ -354,64 +371,68 @@ pub fn DriveNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 	};
 
 	let class = if is_connected {
-		if is_selected {
-			"graph-node drive-node selected"
-		} else {
-			"graph-node drive-node"
-		}
+		if is_selected { "graph-node drive-node selected" } else { "graph-node drive-node" }
 	} else {
-		if is_selected {
-			"graph-node drive-node selected disconnected"
-		} else {
-			"graph-node drive-node disconnected"
-		}
+		if is_selected { "graph-node drive-node selected disconnected" } else { "graph-node drive-node disconnected" }
 	};
 
 	rsx! {
 		div {
 			class: "{class}",
-			style: "
-                left: {x}px; 
-                top: {y}px; 
-                width: {width}px; 
-                height: {height}px; 
-                --node-color: {color};
-            ",
+			style: "left: {x}px; top: {y}px; width: {width}px; height: {height}px; --node-color: {color};",
 			onmousedown: move |e: MouseEvent| {
-			    e.stop_propagation();
-
-			    let (mx, my) = get_workspace_coords(&e);
-
-			    if e.modifiers().shift() {
-			        // Toggle selection
-			        graph.with_mut(|g| g.toggle_select(&node_id));
-			    } else if e.modifiers().ctrl() || e.modifiers().alt() {
-			        // Start edge creation
-			        let center_x = x + width / 2.0;
-			        let center_y = y + height / 2.0;
-
-			        graph
-			            .with_mut(|g| {
-			                g.drag_state = DragState::CreatingEdge {
-			                    source_id: node_id.clone(),
-			                    source_x: center_x,
-			                    source_y: center_y,
-			                    mouse_x: mx,
-			                    mouse_y: my,
-			                };
-			            });
-			    } else {
-			        graph
-			            .with_mut(|g| {
-			                g.drag_state = DragState::ClickPending {
-			                    node_id: node_id.clone(),
-			                    start_x: mx,
-			                    start_y: my,
-			                    mouse_x: mx,
-			                    mouse_y: my,
-			                };
-			            });
-			    }
+				e.stop_propagation();
+				let coords = e.client_coordinates();
+				let (screen_x, screen_y) = (coords.x, coords.y);
+				let (viewport_x, viewport_y, viewport_scale) = graph.with(|g| (g.viewport_x, g.viewport_y, g.viewport_scale));
+				let mx = (screen_x - viewport_x) / viewport_scale;
+				let my = (screen_y - 61.0 - viewport_y) / viewport_scale;
+				let node_id_for_drag = node_id_mousedown.clone();
+				if e.modifiers().shift() {
+					graph.with_mut(|g| g.toggle_select(&node_id_for_drag));
+				} else if e.modifiers().ctrl() || e.modifiers().alt() {
+					let center_x = x + width / 2.0;
+					let center_y = y + height / 2.0;
+					graph.with_mut(|g| {
+						g.drag_state = DragState::CreatingEdge {
+							source_id: node_id_for_drag.clone(),
+							source_x: center_x,
+							source_y: center_y,
+							mouse_x: mx,
+							mouse_y: my,
+						};
+					});
+				} else {
+					graph.with_mut(|g| {
+						g.drag_state = DragState::ClickPending {
+							node_id: node_id_for_drag.clone(),
+							start_x: mx,
+							start_y: my,
+							mouse_x: mx,
+							mouse_y: my,
+						};
+					});
+				}
+			},
+			onmouseup: move |e: MouseEvent| {
+				e.stop_propagation();
+				let drag_state = graph().drag_state.clone();
+				match &drag_state {
+					DragState::CreatingEdge { source_id, .. } => {
+						if source_id != &node_id_mouseup {
+							// Edge creation handled in graph.rs workspace onmouseup
+						}
+					}
+					DragState::Dragging { .. } => {
+						graph.with_mut(|g| {
+							g.release_node_position(&node_id_mouseup);
+							g.release_selected_nodes();
+							g.start_simulation();
+							g.drag_state = DragState::None;
+						});
+					}
+					_ => {}
+				}
 			},
 			div { class: "node-content",
 				span { class: "node-label", "{label}" }

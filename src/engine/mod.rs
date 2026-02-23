@@ -1,6 +1,9 @@
-#[allow(dead_code)]
-pub mod copier;
-#[allow(dead_code)]
+//! Engine modules - Core transfer logic
+
+pub mod transfer;
 pub mod scanner;
-#[allow(dead_code)]
 pub mod scheduler;
+
+pub use transfer::*;
+pub use scanner::*;
+pub use scheduler::*;

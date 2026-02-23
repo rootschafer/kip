@@ -1,13 +1,24 @@
+#![cfg_attr(not(feature = "desktop"), allow(dead_code))]
+
+#[cfg(feature = "desktop")]
 mod app;
+#[cfg(feature = "desktop")]
 mod db;
+#[cfg(feature = "desktop")]
 mod devices;
+#[cfg(feature = "desktop")]
 mod engine;
+#[cfg(feature = "desktop")]
 mod models;
+#[cfg(feature = "desktop")]
 mod ui;
+#[cfg(feature = "desktop")]
 mod util;
 
+#[cfg(feature = "desktop")]
 use dioxus::prelude::*;
 
+#[cfg(feature = "desktop")]
 fn main() {
 	// Enable INFO level logging to console
 	tracing_subscriber::fmt()
@@ -15,7 +26,6 @@ fn main() {
 		.init();
 
 	info!("Starting Kip");
-
 
 	// Initialize database before Dioxus launch.
 	// We keep the runtime alive — SurrealDB uses it for background tasks.
@@ -37,4 +47,10 @@ fn main() {
 				.launch(app::DbErrorApp);
 		}
 	}
+}
+
+#[cfg(not(feature = "desktop"))]
+fn main() {
+    // Web or other platform entry point
+    tracing::info!("Kip starting...");
 }

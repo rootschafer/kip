@@ -445,7 +445,7 @@ impl Graph {
 			return false;
 		}
 
-		tracing::info!("tick: alpha={:.4}, nodes={}, edges={}", self.alpha, self.nodes.len(), self.edges.len());
+		// tracing::info!("tick: alpha={:.4}, nodes={}, edges={}", self.alpha, self.nodes.len(), self.edges.len());
 		apply_forces(&mut self.nodes, &self.edges, self.alpha);
 		self.alpha *= ALPHA_DECAY;
 
@@ -673,9 +673,9 @@ struct LocationRow {
 
 #[derive(Debug, Clone, SurrealValue)]
 struct IntentRow {
-	id: RecordId,
-	source: RecordId,
-	destinations: Vec<RecordId>,
+	id: String,
+	source: String,
+	dest_id: String,
 	status: String,
 	total_files: i64,
 	completed_files: i64,
@@ -944,29 +944,36 @@ async fn load_edges(db: &DbHandle) -> Result<Vec<GraphEdge>, String> {
 	let mut resp = db
 		.db
 		.query(
-			"SELECT id, source, destinations, status, total_files, completed_files, created_at
+			"SELECT string::slice(id, 0, 100) AS id, string::slice(source, 0, 100) AS source, destinations[0] AS dest_id, status, total_files, completed_files, created_at
              FROM intent ORDER BY created_at DESC",
 		)
 		.await
 		.map_err(|e| e.to_string())?;
-	let rows: Vec<IntentRow> = resp.take(0).map_err(|e| e.to_string())?;
+	
+	let rows: Vec<IntentRow> = match resp.take(0) {
+		Ok(r) => r,
+		Err(e) => {
+			tracing::warn!("load_edges: failed to parse intents: {}", e);
+			return Ok(Vec::new());
+		}
+	};
 
 	let mut edges = Vec::new();
 	for row in &rows {
-		let dest_id = match row.destinations.first() {
-			Some(d) => rid_string(d),
-			None => continue,
-		};
+		if row.dest_id.is_empty() {
+			continue;
+		}
 		edges.push(GraphEdge {
-			id: rid_string(&row.id),
-			source_id: rid_string(&row.source),
-			dest_id,
+			id: row.id.clone(),
+			source_id: row.source.clone(),
+			dest_id: row.dest_id.clone(),
 			status: row.status.clone(),
 			total_files: row.total_files,
 			completed_files: row.completed_files,
 			created_at: row.created_at.clone(),
 		});
 	}
+	tracing::info!("Loaded {} edges", edges.len());
 	Ok(edges)
 }
 

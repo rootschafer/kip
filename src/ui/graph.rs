@@ -123,9 +123,9 @@ pub fn MappingGraph(
 	let db_for_resource = db.clone();
 	let loaded_data = use_resource(move || {
 		let db_val = db_for_resource.clone();
-		let tick = refresh_tick; // Capture tick VALUE (u32), not the signal
+		let tick = refresh_tick;
 		async move {
-			let _ = tick; // Use tick to create dependency
+			let _ = tick;
 			load_graph_data(&db_val).await.ok()
 		}
 	});
@@ -135,8 +135,12 @@ pub fn MappingGraph(
 		let data = loaded_data.read();
 		if let Some(Some((containers, nodes, edges, review_count))) = data.as_ref() {
 			graph.with_mut(|g| {
+				let had_nodes = !g.nodes.is_empty();
 				g.load_from_db(containers.clone(), nodes.clone(), edges.clone(), *review_count);
-				g.start_simulation(); // Start simulation when data loads
+				// Only start simulation on initial load to prevent constant re-simulation
+				if !had_nodes {
+					g.start_simulation();
+				}
 			});
 		}
 	});
@@ -158,7 +162,7 @@ pub fn MappingGraph(
 
 				tick_count += 1;
 				if tick_count % 10 == 0 {
-					tracing::info!("Simulation loop: tick {}", tick_count);
+					// tracing::info!("Simulation loop: tick {}", tick_count);
 				}
 
 				tokio::time::sleep(std::time::Duration::from_millis(16)).await; // ~60fps when running
@@ -174,7 +178,7 @@ pub fn MappingGraph(
 				});
 
 				if !should_continue {
-					tracing::info!("Simulation loop: tick {} stopped, will restart if needed", tick_count);
+					// tracing::info!("Simulation loop: tick {} stopped, will restart if needed", tick_count);
 					// Don't break - just reset tick count and wait for sim_running to become true again
 					tick_count = 0;
 				}
@@ -516,9 +520,11 @@ pub fn MappingGraph(
 				// SVG overlay for edges and interactions with viewport transform
 				{
 					let (scale, x, y) = graph.with(|g| (g.viewport_scale, g.viewport_x, g.viewport_y));
+					let visible_count = graph().visible_nodes().len();
+					// tracing::info!("DEBUG: Rendering {} visible nodes, viewport=({},{}) scale={}", visible_count, x, y, scale);
 					rsx! {
 						div {
-							style: "transform: translate({x}px, {y}px) scale({scale}); transform-origin: 0 0; width: 100%; height: 100%;",
+							style: "transform: translate({x}px, {y}px) scale({scale}); transform-origin: 0 0; width: 100%; height: 100%; position: relative;",
 							GraphSvgOverlay { 
 								graph, 
 								canvas_width: 2000.0, 

@@ -1469,3 +1469,191 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
     text-overflow: ellipsis;
     flex: 1;
 }
+
+/* ─── Zoom controls ─── */
+.zoom-controls {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+.btn-zoom {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    color: var(--text);
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+.btn-zoom:hover {
+    background: var(--glass-hover);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+.btn-zoom:active {
+    transform: scale(0.95);
+}
+
+/* ─── Enhanced node gradients ─── */
+/* Machine nodes (blue gradient) */
+.graph-node.machine-node {
+    background: radial-gradient(circle at 30% 30%, #60a5fa, #1d4ed8);
+    border-color: rgba(96, 165, 250, 0.3);
+}
+.graph-node.machine-node:hover {
+    background: radial-gradient(circle at 30% 30%, #93c5fd, #2563eb);
+}
+
+/* Drive nodes (green gradient) */
+.graph-node.drive-node {
+    background: radial-gradient(circle at 30% 30%, #34d399, #059669);
+    border-color: rgba(52, 211, 153, 0.3);
+}
+.graph-node.drive-node:hover {
+    background: radial-gradient(circle at 30% 30%, #6ee7b7, #10b981);
+}
+.graph-node.drive-node.disconnected {
+    background: radial-gradient(circle at 30% 30%, #94a3b8, #334155);
+    border-color: rgba(148, 163, 184, 0.3);
+}
+
+/* Directory nodes (slate gradient) */
+.graph-node.dir-node {
+    background: radial-gradient(circle at 30% 30%, #94a3b8, #334155);
+    border-color: rgba(148, 163, 184, 0.3);
+}
+.graph-node.dir-node:hover {
+    background: radial-gradient(circle at 30% 30%, #cbd5e1, #475569);
+}
+.graph-node.dir-node.expanded {
+    border-color: var(--accent);
+    box-shadow: 0 0 16px rgba(74, 158, 255, 0.4);
+}
+
+/* Group nodes (emerald gradient) */
+.graph-node.group-node {
+    background: radial-gradient(circle at 30% 30%, #34d399, #059669);
+    border-color: rgba(52, 211, 153, 0.3);
+}
+.graph-node.group-node:hover {
+    background: radial-gradient(circle at 30% 30%, #6ee7b7, #10b981);
+}
+
+/* File nodes (glass pill) */
+.graph-node.file-node {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+.graph-node.file-node:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* ─── Selection glow effect ─── */
+.graph-node.selected {
+    box-shadow: 
+        0 0 0 2px rgba(74, 158, 255, 0.5),
+        0 0 20px rgba(74, 158, 255, 0.4),
+        0 0 40px rgba(74, 158, 255, 0.2) !important;
+}
+.graph-node.selected::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: inherit;
+    border: 2px dashed rgba(74, 158, 255, 0.6);
+    pointer-events: none;
+    animation: rotate-dash 3s linear infinite;
+}
+@keyframes rotate-dash {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Multi-selection styling */
+.graph-node.selected:not(:only-child) {
+    box-shadow: 
+        0 0 0 2px rgba(74, 158, 255, 0.5),
+        0 0 16px rgba(74, 158, 255, 0.3),
+        0 0 32px rgba(74, 158, 255, 0.15) !important;
+}
+
+/* ─── Edge creation hover state ─── */
+.graph-node.edge-target {
+    box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.8), 0 0 30px rgba(74, 158, 255, 0.6) !important;
+    transform: scale(1.1);
+}
+
+/* ─── Status indicators on nodes ─── */
+.graph-node.syncing::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: inherit;
+    border: 3px solid transparent;
+    border-top-color: var(--accent);
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.graph-node.error::after {
+    content: 'X';
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--red);
+    color: #fff;
+    font-size: 12px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--bg);
+}
+
+.graph-node.offline {
+    opacity: 0.5;
+    filter: grayscale(0.5);
+}
+
+/* ─── Node size based on content ─── */
+/* Larger directories based on child count (applied via inline style) */
+.graph-node.dir-node[data-size="large"] {
+    width: 80px;
+    height: 80px;
+}
+.graph-node.dir-node[data-size="medium"] {
+    width: 65px;
+    height: 65px;
+}
+.graph-node.dir-node[data-size="small"] {
+    width: 50px;
+    height: 50px;
+}
+
+/* Toolbar actions - right side controls */
+.toolbar-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-left: auto;
+}
+
+/* Ensure nodes are visible */
+.ws-node {
+    z-index: 10;
+}
+
