@@ -1,188 +1,189 @@
 # Kip Development: Getting Started
 
-## ⚠️ CRITICAL: Read This First
+**Date:** February 22, 2026
+
+---
+
+## Quick Start
+
+### For New Developers
+
+1. **Read this first:** `INTERACTION_MODEL.md` — How the UI works (and should work)
+2. **Then read:** `COMPREHENSIVE_DEVELOPMENT_PLAN.md` — Current state and roadmap
+3. **Architecture:** `new_arch/README.md` — API layer and CLI architecture
+
+### For AI Agents
 
 **DO NOT start coding until you have:**
-1. Read this entire document
-2. Read `CRITICAL_ISSUES.md` - ALL infinite loop patterns and fixes
-3. Read `IMPLEMENTATION_SUMMARY.md` - Current implementation state
-4. Reviewed the TypeScript reference in `external/nexus-node-sync/`
+1. Read `INTERACTION_MODEL.md` — Understand the interaction patterns
+2. Read `COMPREHENSIVE_DEVELOPMENT_PLAN.md` — Know what's implemented vs. planned
+3. Reviewed the code structure in `src/`
+
+---
 
 ## Project Overview
 
-Kip is a file synchronization orchestrator built with **Dioxus (Rust)** + **SurrealDB**. The primary interface is a **force-directed graph** where users visualize and manage file sync relationships between devices, folders, and files.
+**Kip** is a file transfer orchestrator. Users create sync relationships between locations (files, directories, machines) by connecting nodes in a 2D graph workspace.
 
-## Reference Implementation
+**Tech Stack:**
+- **Frontend:** Dioxus 0.7.3 (Rust, desktop + web capable)
+- **Backend:** Rust library with API layer
+- **Database:** SurrealDB 3.0.0 (stable) with SurrealKV embedded storage
+- **CLI:** clap-based command interface
 
-**Location:** `external/nexus-node-sync/`
+---
 
-A complete TypeScript/React implementation using D3.js force-directed graphs. Your job is to **port concepts and patterns** to Dioxus/Rust.
+## Current State (February 22, 2026)
 
-**Key files to study:**
-- `external/nexus-node-sync/types.ts` - Node/Link data structures
-- `external/nexus-node-sync/App.tsx` - Main app logic, interaction handlers
-- `external/nexus-node-sync/components/GraphCanvas.tsx` - **D3 force-directed graph**
-- `external/nexus-node-sync/services/mockFileSystem.ts` - Mock data generation
+### ✅ What Works
 
-## Current State (February 2026)
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Database layer | ✅ Complete | SurrealDB 3.0.0 stable |
+| API layer | ✅ Complete | `src/api/*` modules |
+| CLI | ✅ Complete | Full command set |
+| Transfer engine | ✅ Complete | Chunked copying, hashing |
+| Filesystem scanner | ✅ Complete | Handles symlinks |
+| Job scheduler | ✅ Complete | Bounded concurrency |
+| Node rendering | ✅ Complete | Files=pills, dirs=circles |
+| Force-directed layout | ✅ Complete | Cluster separation |
+| Edge creation | ✅ Complete | Drag to connect |
+| Lasso selection | ✅ Complete | Area select |
+| Multi-drag | ✅ Complete | Move multiple nodes |
+| File picker | ✅ Complete | Column navigation |
 
-### ✅ COMPLETED - Force-Directed Graph
-- **Physics simulation** - Repulsion, link attraction, center gravity, collision
-- **Infinite canvas** - Alt+drag to pan, nodes spread infinitely
-- **Cluster separation** - Machines/drives form separate visual clusters
-- **All nodes connected** - Hierarchy edges for parent-child relationships
-- **Drag-to-move** - Fix/release positions with D3-style fx/fy
-- **Edge preview** - Rubber band line follows cursor during edge creation
-- **Cluster backgrounds** - Faint colored circles around each machine/drive
-- **Filesystem scanning** - Alt+click machine/drive to scan and populate nodes
+### ⚠️ What Needs Work
 
-### ✅ COMPLETED - Infrastructure
-- Database layer (SurrealDB)
-- App structure with proper signal management
-- File picker component
-- Notification system
-- Review queue
+| Feature | Issue | Priority |
+|---------|-------|----------|
+| Click behavior | Single click selects AND drags (conflict) | HIGH |
+| Context menus | Not implemented | HIGH |
+| Keyboard shortcuts | Not implemented | HIGH |
+| Orbit view | Partially working | MEDIUM |
+| Enter view | Not implemented | MEDIUM |
+| Node grouping | Not implemented | LOW |
+| Layout persistence | Not implemented | LOW |
 
-### ❌ INCOMPLETE / NEEDS WORK
-
-1. **Zoom** - Scroll wheel zoom not working (Dioxus API issue)
-2. **Directory expansion** - Click to expand folders (exists but needs filesystem integration)
-3. **Edge creation** - Drag between nodes to create sync (UI exists, DB creation missing)
-4. **Lasso selection** - Shift+drag to select multiple (UI exists, multi-drag missing)
-5. **Node visuals** - Circle vs pill shapes, gradients, status indicators
-6. **Node grouping** - Group selected nodes into container
-
-## 🐛 CRITICAL: Infinite Loop Patterns (DO NOT REPEAT)
-
-### Pattern 1: Spawns in Component Body
-```rust
-// ❌ WRONG - Creates new spawn on EVERY render
-#[component]
-fn MyComponent() -> Element {
-    spawn(async move { loop { /* ... */ } });
-    rsx! { /* ... */ }
-}
-
-// ✅ CORRECT - Wrap in use_effect
-#[component]
-fn MyComponent() -> Element {
-    use_effect(move || {
-        spawn(async move { loop { /* ... */ } });
-    });
-    rsx! { /* ... */ }
-}
-```
-
-### Pattern 2: Resource Updating Signals
-```rust
-// ❌ WRONG - Resource updates signal, triggers re-render, recreates resource
-use_resource(move || {
-    let graph_val = graph.clone();
-    async move {
-        let data = load().await;
-        graph_val.with_mut(|g| g.load(data)); // INFINITE LOOP
-    }
-});
-
-// ✅ CORRECT - Separate resource and effect
-let loaded_data = use_resource(move || async move { load().await.ok() });
-use_effect(move || {
-    if let Some(Some(data)) = loaded_data.read().as_ref() {
-        graph.with_mut(|g| g.load(data));
-    }
-});
-```
-
-### Pattern 3: Signal vs Value Capture
-```rust
-// ❌ WRONG - Captures Signal<T>, closure changes every render
-use_resource(move || {
-    let tick = refresh_tick; // tick is Signal<u32>
-    async move { /* ... */ }
-});
-
-// ✅ CORRECT - Capture the VALUE
-use_resource(move || {
-    let tick = refresh_tick; // tick is u32 (the VALUE)
-    async move {
-        let _ = tick; // Use the value
-        /* ... */
-    }
-});
-```
-
-### Pattern 4: File Logging
-```rust
-// ❌ WRONG - Created 209GB log file
-tracing_subscriber::fmt()
-    .with_writer(file_appender)
-    .init();
-
-// ✅ CORRECT - Console only, WARN level
-tracing_subscriber::fmt()
-    .with_max_level(tracing::Level::WARN)
-    .init();
-```
-
-## Architecture
-
-### Key Components
-- `src/main.rs` - Entry point, logging (console only, WARN level)
-- `src/app.rs` - Root component, global state
-- `src/ui/graph.rs` - Main graph component
-- `src/ui/graph_store.rs` - Graph state, physics simulation
-- `src/ui/graph_nodes.rs` - Node rendering
-- `src/ui/graph_edges.rs` - SVG edge overlay
-- `src/ui/graph_types.rs` - Type definitions
-
-### Database Schema
-- `machine` - Computers (local/remote)
-- `drive` - Mounted drives
-- `location` - File paths
-- `intent` - Sync relationships
-- `review_item` - Conflicts
+---
 
 ## Build Commands
 
 ```bash
-dx build          # Build the app
-dx serve          # Run in dev mode
-dx check          # Check without building
+# Always use dx, not cargo
+dx build                        # Build desktop app
+dx serve --platform desktop     # Run with hot reload
+dx check                        # Check without building
+
+# CLI
+cargo build --bin kip-cli       # Build CLI
+./target/debug/kip-cli --help   # Show CLI help
+
+# Formatting
+dx fmt                          # Format Dioxus code
+cargo fmt                       # Format Rust code
 ```
 
-**DO NOT use `cargo build`** - Dioxus projects must use `dx` commands.
+---
 
-## Development Guidelines
+## Key Directories
 
-### Dioxus Patterns
-- `use_signal<T>` - Local component state
-- `use_store` - Global app state
-- `use_context` - Shared resources (DbHandle)
-- `use_resource` - Async data loading
-- `use_effect` - Side effects (spawns, subscriptions)
-
-### Force-Directed Graph Constants
-Current tuned values in `src/ui/graph_store.rs`:
-```rust
-REPULSION: 2000.0      // Strong cluster separation
-SPRING_K: 0.03         // Weak link tension
-CENTER_GRAVITY: 0.003  // Very weak center pull
-ALPHA_DECAY: 0.97      // Slow decay for settling
+```
+kip/
+├── src/
+│   ├── api/              # API layer (intent, location, review, etc.)
+│   ├── engine/           # Transfer engine (transfer, scanner, scheduler)
+│   ├── db/               # Database layer (schema, init)
+│   ├── ui/               # Dioxus UI components
+│   └── bin/              # CLI binary
+├── crates/
+│   └── actix-dioxus-serve/  # Web serving (future)
+├── tests/                # Integration tests
+└── notes/
+    ├── the_design/       # Design documentation
+    └── new_arch/         # Architecture documentation
 ```
 
-## Files to Update
+---
 
-When making changes, update:
-- `IMPLEMENTATION_SUMMARY.md` - Current state
-- `CRITICAL_ISSUES.md` - New bugs/gotchas
-- `Phase*/` directories - Feature-specific docs
+## Design Documentation
 
-## Contact
+### Core Documents
 
-Document ALL issues in `CRITICAL_ISSUES.md` with:
-- What you were trying to do
-- What actually happened
-- Code snippets
-- Fix if found
+| Document | Purpose |
+|----------|---------|
+| `INTERACTION_MODEL.md` | Click/drag/keyboard behavior specification |
+| `COMPREHENSIVE_DEVELOPMENT_PLAN.md` | Current state, roadmap, technical debt |
+| `KIP_DESIGN_7_MAPPING_GRAPH.md` | Graph UI architecture (still relevant) |
+| `KIP_DESIGN_8_FILE_PICKER.md` | File picker design |
 
-**DO NOT leave issues undocumented** - the next developer will hit the same problem.
+### Architecture Documents
+
+| Document | Purpose |
+|----------|---------|
+| `new_arch/README.md` | Entry point for architecture docs |
+| `new_arch/01_architecture_overview.md` | Unified architecture vision |
+| `new_arch/02_api_specification.md` | API layer specification |
+| `new_arch/05_migration_plan.md` | Implementation phases |
+
+### Historical Documents (Reference Only)
+
+These documents contain outdated information but may have useful context:
+
+- `KIP_DESIGN_1.md` through `KIP_DESIGN_6.md` — Early design thinking
+- `Phase1/` through `Phase4/` — Original phase plans (superseded)
+- `NEXT_AGENT_HANDOFF.md` — Previous handoff notes
+
+---
+
+## Critical Issues
+
+See `CRITICAL_ISSUES.md` for known bugs and workarounds.
+
+**Top issues:**
+1. SurrealDB type coercion (RecordId vs String) — Partially fixed
+2. Click/drag conflict — Needs interaction refactor
+3. No context menus — Needs implementation
+
+---
+
+## Testing
+
+```bash
+# Run integration tests
+cargo test --test integration_tests -- --test-threads=1
+
+# Run unit tests
+cargo test --test api_tests -- --test-threads=1
+```
+
+**Note:** Some tests are ignored due to SurrealDB type issues.
+
+---
+
+## Development Workflow
+
+1. **Pick a task** from `COMPREHENSIVE_DEVELOPMENT_PLAN.md`
+2. **Read relevant docs** in `notes/the_design/`
+3. **Implement** the feature
+4. **Test** with `dx check` and `cargo test`
+5. **Update docs** if behavior changes
+
+---
+
+## Getting Help
+
+- **Architecture questions:** Read `new_arch/` documents
+- **UI questions:** Read `KIP_DESIGN_7_MAPPING_GRAPH.md`
+- **Interaction questions:** Read `INTERACTION_MODEL.md`
+- **Bug troubleshooting:** Check `CRITICAL_ISSUES.md`
+
+---
+
+## Document History
+
+| Date | Change |
+|------|--------|
+| 2026-02-13 | Initial version |
+| 2026-02-17 | Updated with critical issues |
+| 2026-02-22 | Major revision: accurate current state, new interaction model |
+

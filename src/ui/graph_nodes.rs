@@ -52,6 +52,7 @@ pub fn FileNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 	rsx! {
 		div {
 			class: "{class}",
+			"data-node-id": "{node_id}",
 			style: "left: {x}px; top: {y}px; width: {width}px; height: {height}px; --node-color: {color};",
 			onmousedown: move |e: MouseEvent| {
 				e.stop_propagation();
@@ -141,6 +142,7 @@ pub fn DirNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 	rsx! {
 		div {
 			class: "{class}",
+			"data-node-id": "{node_id}",
 			style: "left: {x}px; top: {y}px; width: {width}px; height: {height}px; --node-color: {color};",
 			onmousedown: move |e: MouseEvent| {
 				e.stop_propagation();
@@ -235,6 +237,7 @@ pub fn GroupNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 	rsx! {
 		div {
 			class: "{class}",
+			"data-node-id": "{node_id}",
 			style: "left: {x}px; top: {y}px; width: {width}px; height: {height}px; --node-color: {color};",
 			onmousedown: move |e: MouseEvent| {
 				e.stop_propagation();
@@ -324,6 +327,7 @@ pub fn MachineNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 	rsx! {
 		div {
 			class: "{class}",
+			"data-node-id": "{node_id}",
 			style: "left: {x}px; top: {y}px; width: {width}px; height: {height}px; --node-color: {color};",
 			onmousedown: move |e: MouseEvent| {
 				e.stop_propagation();
@@ -425,6 +429,7 @@ pub fn DriveNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 	rsx! {
 		div {
 			class: "{class}",
+			"data-node-id": "{node_id}",
 			style: "left: {x}px; top: {y}px; width: {width}px; height: {height}px; --node-color: {color};",
 			onmousedown: move |e: MouseEvent| {
 				e.stop_propagation();

@@ -1,256 +1,356 @@
 # Kip Development Plan: From Current State to Production Release
 
+**Date:** February 22, 2026  
+**Status:** Living Document
+
+---
+
 ## Executive Summary
 
-This document outlines the complete development plan for Kip, taking into account the current state of the project after implementing the free workspace architecture with circular directory nodes. The plan moves from the current working prototype to a production-ready file transfer orchestrator.
+Kip is a file transfer orchestrator with a spatial graph interface. Users create sync relationships by connecting location nodes in a 2D workspace. The app handles the complexity of monitoring, transferring, and resolving conflicts automatically.
+
+---
 
 ## Current State Assessment
 
 ### Architecture Overview
-- **UI Framework**: Dioxus 0.7.3 desktop application
-- **Database**: SurrealDB 3.0.0-beta.3 with kv-surrealkv storage
-- **Core Components**: 
-  - Free workspace with absolutely positioned nodes
-  - Machine/Drive chips in toolbar
-  - Circular directory nodes and rectangular file nodes
-  - SVG overlay for edges and interactions
-  - File picker with column navigation
+
+| Component | Technology | Status |
+|-----------|------------|--------|
+| **UI Framework** | Dioxus 0.7.3 | ✅ Production-ready |
+| **Database** | SurrealDB 3.0.0 (stable) | ✅ Production-ready |
+| **Storage Engine** | SurrealKV (embedded) | ✅ Working |
+| **Backend API** | Rust library layer | ✅ Implemented |
+| **CLI** | clap + API layer | ✅ Implemented |
+| **Transfer Engine** | Custom chunked copier | ✅ Implemented |
 
 ### Implemented Features
-- [x] Free workspace layout with absolute positioning (USER VERIFIED)
-- [x] Machine/Drive chips in toolbar as clickable buttons (USER VERIFIED)
-- [√] Circular directory nodes with child counts (AI CONFIRMED)
-- [x] Rectangular file nodes (USER VERIFIED)
-- [x] Node selection (individual and lasso) (USER VERIFIED)
-- [x] Edge creation between nodes (USER VERIFIED)
-- [x] Basic file picker functionality (USER VERIFIED)
-- [x] Remote machine addition (USER VERIFIED)
-- [x] Status indicators (USER VERIFIED)
-- [x] Glassmorphic UI design (USER VERIFIED)
 
-### Current Limitations
-- Nodes use temporary grid layout instead of force-directed physics
-- [~] Orbit view (children fanned out around parent) - PARTIALLY IMPLEMENTED
-- [~] Enter view (workspace shows only direct children) - PARTIALLY IMPLEMENTED
-- [~] Dynamic node sizing based on total descendant count - PARTIALLY IMPLEMENTED
-- [ ] Node grouping functionality
-- [ ] Actual file transfer engine
-- [ ] Error handling/review system
-- [ ] Layout persistence
-- [ ] Proper click vs drag detection (currently interferes with edge creation)
-- [ ] SVG coordinate system alignment (cursor offset issue)
+#### Core Infrastructure
+- [x] SurrealDB embedded database with schema
+- [x] API layer abstraction (`src/api/`)
+- [x] CLI binary with full command set
+- [x] Transfer engine with chunked copying
+- [x] Filesystem scanner with symlink handling
+- [x] Job scheduler with bounded concurrency
+- [x] Error classification and review queue
+
+#### UI Components
+- [x] Free workspace with absolutely positioned nodes
+- [x] Machine/Drive chips in toolbar
+- [x] Node rendering (files as pills, directories as circles)
+- [x] Force-directed layout with cluster separation
+- [x] Edge creation via drag
+- [x] Lasso selection
+- [x] Multi-select and multi-drag
+- [x] File picker with column navigation
+- [x] Remote machine addition
+- [x] Status indicators and notifications
+- [x] Glassmorphic UI design
+
+#### Data Model
+- [x] Machine, Drive, Location entities
+- [x] Intent (sync relationship) tracking
+- [x] TransferJob with status tracking
+- [x] ReviewItem for conflict resolution
+- [x] FileRecord for deduplication
+
+### Known Limitations
+
+#### Interaction Model (TO BE FIXED)
+- [ ] Single click currently selects AND starts drag (conflicting)
+- [ ] No context menu for node operations
+- [ ] No keyboard shortcuts implemented
+- [ ] Edge creation interferes with node selection
+
+#### Visual Features
+- [ ] Orbit view for directory children (partially working)
+- [ ] Enter view (navigate into directory)
+- [ ] Node grouping/collapsing
+- [ ] Layout persistence across sessions
+- [ ] Progress visualization on edges
+
+#### Transfer Features
+- [ ] Bidirectional sync
+- [ ] Scheduled/sync-on-change intents
+- [ ] Remote (SSH) transfer support
+- [ ] Bandwidth throttling
+- [ ] Conflict auto-resolution rules
+
+---
 
 ## Development Roadmap
 
-### Critical Issues First
-Before proceeding with the planned phases, address these critical issues that affect core functionality:
-- See `CRITICAL_ISSUES.md` for detailed problem descriptions and solution approaches
+### Phase 1: Interaction Model (Current Priority)
 
-### Phase 1: Core Functionality (Weeks 1-3)
-#### 1.1 Directory Expansion System
-- **Objective**: Implement orbit and enter views for directory nodes
-- **Status**: [~] PARTIALLY IMPLEMENTED
-- **Reference Files**: `Phase1/Phase1.1_Directory_Expansion_Implementation.md`, `Phase1/Phase1.1_Directory_Expansion_and_File_Picker.md`
-- **Current Implementation**:
-  - [√] Click handlers implemented to toggle expansion states (AI CONFIRMED)
-  - [~] Expansion state tracking with (is_orbit, is_expanded) tuples (PARTIAL)
-  - [~] Node sizing based on total descendant count (PARTIAL)
-  - [~] Visual distinction between collapsed, orbit, and expanded states (PARTIAL)
-  - [ ] Orbit view: children properly fanned out around parent in circular formation
-  - [ ] Enter view: workspace properly filtered to show only direct children
-  - [ ] Proper click vs drag detection to avoid interference with edge creation
-  - [ ] SVG coordinate system alignment for accurate cursor positioning
-  - [ ] Animate transitions between states
-- **Deliverables**: Working directory expansion with smooth animations and proper state management
+**Goal:** Fix fundamental interaction conflicts and add context menus
 
-#### 1.2 Node Grouping System
-- **Objective**: Allow users to group multiple nodes into containers
-- **Status**: [ ] NOT STARTED
-- **Reference Files**: `Phase1/Phase1.2_Node_Grouping_Implementation.md`
-- **Tasks**:
-  - [ ] Implement selection-based grouping (Ctrl+G or context menu)
-  - [ ] Create group node representation (circular like directories)
-  - [ ] Implement group expansion/collapse
-  - [ ] Handle edge re-routing when nodes are grouped
-  - [ ] Store group membership in database
-- **Deliverables**: Functional grouping system with persistent storage
+#### 1.1 Click Behavior Refactor
+- **Single click:** Select only (no drag start)
+- **Click + drag:** Move node(s)
+- **Double click:** Open context menu
+- **Status:** Design complete, implementation pending
 
-#### 1.3 Force-Directed Layout Engine
-- **Objective**: Replace grid positioning with physics-based layout
-- **Status**: [ ] NOT STARTED
-- **Reference Files**: `Phase1/Phase1.3_Force_Directed_Layout_Implementation.md`
-- **Tasks**:
-  - [ ] Implement force-directed graph algorithm
-  - [ ] Add forces: node repulsion, edge attraction, container cohesion
-  - [ ] Implement user drag pinning (persistent positions)
-  - [ ] Add layout persistence to database
-  - [ ] Optimize performance for large graphs
-- **Deliverables**: Dynamic, physics-based node positioning
+#### 1.2 Context Menu System
+- Node-type-specific menus (Machine/Drive, Directory, File)
+- Keyboard shortcut integration
+- Extensible action framework
+- **Status:** Design complete, implementation pending
 
-### Phase 2: Transfer Engine (Weeks 4-6)
-#### 2.1 Core Transfer Engine
-- **Objective**: Implement actual file transfer functionality
-- **Status**: [ ] NOT STARTED
-- **Reference Files**: `Phase2/Phase2.1_Core_Transfer_Engine.md`
-- **Tasks**:
-  - [ ] Create transfer job model and database schema
-  - [ ] Implement file scanning and comparison logic
-  - [ ] Build chunked file copying with progress tracking
-  - [ ] Add hash verification for integrity checking
-  - [ ] Implement resume capability for interrupted transfers
-- **Deliverables**: Working file transfer engine with progress tracking
+#### 1.3 Keyboard Shortcuts
+- Global shortcuts (ESC, DELETE, SPACE, ENTER)
+- Navigation shortcuts (ENTER into, BACKSPACE parent)
+- Selection shortcuts (CMD+A, Shift+Click)
+- **Status:** Design complete, implementation pending
 
-#### 2.2 Intent Lifecycle Management
-- **Objective**: Manage the complete lifecycle of sync relationships
-- **Status**: [ ] NOT STARTED
-- **Reference Files**: `Phase2/Phase2.2_Intent_Lifecycle_Management.md`
-- **Tasks**:
-  - [ ] Implement intent creation/deletion via UI
-  - [ ] Add intent status tracking (idle, scanning, transferring, complete, error)
-  - [ ] Create scheduling system for recurring transfers
-  - [ ] Implement bidirectional sync capability
-  - [ ] Add conflict resolution strategies
-- **Deliverables**: Complete intent management system
+**Deliverables:**
+- Consistent, non-conflicting interactions
+- Context menus for all node types
+- Full keyboard navigation
+- Updated interaction documentation
 
-#### 2.3 Error Handling & Review Queue
-- **Objective**: Robust error handling with user review system
-- **Status**: [ ] NOT STARTED
-- **Reference Files**: `Phase2/Phase2.3_Error_Handling_and_Review_Queue.md`
-- **Tasks**:
-  - [ ] Implement error classification system
-  - [ ] Create review queue UI in bottom panel
-  - [ ] Add resolution options for different error types
-  - [ ] Implement retry mechanisms
-  - [ ] Add error notifications and status indicators
-- **Deliverables**: Comprehensive error handling and review system
+---
 
-### Phase 3: Advanced Features (Weeks 7-9)
-#### 3.1 Advanced Visualization
-- **Objective**: Enhance the graph with advanced visual features
-- **Status**: [ ] NOT STARTED
-- **Reference Files**: `Phase3/Phase3.1_Advanced_Visualization.md`
-- **Tasks**:
-  - [ ] Add progress indicators on edges
-  - [ ] Implement edge bundling for cleaner visuals
-  - [ ] Add timeline view for transfer history
-  - [ ] Create statistics dashboard
-  - [ ] Add search/filter capabilities
-- **Deliverables**: Rich visualization features
+### Phase 2: Visual Enhancements
 
-#### 3.2 Remote Access & Security
-- **Objective**: Secure remote machine access and management
-- **Status**: [ ] NOT STARTED
-- **Reference Files**: `Phase3/Phase3.2_Remote_Access_and_Security.md`
-- **Tasks**:
-  - [ ] Implement SSH connection management
-  - [ ] Add key-based authentication
-  - [ ] Create secure credential storage
-  - [ ] Implement connection pooling
-  - [ ] Add remote path validation
-- **Deliverables**: Secure remote access system
+#### 2.1 Directory Expansion
+- Orbit view: children fan out around parent circle
+- Enter view: navigate into directory context
+- Breadcrumb navigation for returning to parent
+- Smooth animations between states
 
-#### 3.3 Performance Optimization
-- **Objective**: Optimize for large-scale deployments
-- **Status**: [ ] NOT STARTED
-- **Reference Files**: `Phase3/Phase3.3_Performance_Optimization.md`
-- **Tasks**:
-  - [ ] Implement lazy loading for large directory trees
-  - [ ] Add pagination for large datasets
-  - [ ] Optimize database queries
-  - [ ] Implement caching strategies
-  - [ ] Add memory usage monitoring
-- **Deliverables**: Optimized performance for large graphs
+#### 2.2 Node Grouping
+- Select multiple nodes → group into collapsible container
+- Group shows summary ("5 locations")
+- Edges reroute to group container
+- Nested groups supported
+- Persisted to database
 
-### Phase 4: Production Readiness (Weeks 10-12)
-#### 4.1 Testing & Quality Assurance
-- **Objective**: Ensure production-quality code
-- **Status**: [ ] NOT STARTED
-- **Reference Files**: `Phase4/Phase4.1_Testing_and_Quality_Assurance.md`
-- **Tasks**:
-  - [ ] Write comprehensive unit tests
-  - [ ] Implement integration tests
-  - [ ] Perform stress testing with large datasets
-  - [ ] Conduct usability testing
-  - [ ] Fix bugs identified during testing
-- **Deliverables**: Stable, tested application
+#### 2.3 Layout Persistence
+- Save node positions to database
+- Restore layout on app launch
+- Auto-layout for new nodes
+- Manual position locking
 
-#### 4.2 Deployment & Distribution
-- **Objective**: Prepare for distribution
-- **Status**: [ ] NOT STARTED
-- **Reference Files**: `Phase4/Phase4.2_Deployment_and_Distribution.md`
-- **Tasks**:
-  - [ ] Create installer packages (DMG for macOS, MSI for Windows)
-  - [ ] Implement auto-update mechanism
-  - [ ] Set up crash reporting
-  - [ ] Create documentation website
-  - [ ] Prepare marketing materials
-- **Deliverables**: Distributable application packages
+#### 2.4 Edge Visualization
+- Progress bars on transferring edges
+- Edge bundling for parallel connections
+- Animated flow indicators
+- Hover details (file count, last sync time)
 
-#### 4.3 Documentation & Support
-- **Objective**: Provide comprehensive user support
-- **Status**: [ ] NOT STARTED
-- **Reference Files**: `Phase4/Phase4.3_Documentation_and_Support.md`
-- **Tasks**:
-  - [ ] Write user manual and tutorials
-  - [ ] Create API documentation
-  - [ ] Set up community forum
-  - [ ] Prepare FAQ and troubleshooting guides
-  - [ ] Create video tutorials
-- **Deliverables**: Complete documentation suite
+**Deliverables:**
+- Intuitive directory navigation
+- Reduced visual clutter via grouping
+- Layout survives restarts
+- Clear transfer status at a glance
 
-## Technical Implementation Notes
+---
 
-### Component Architecture Principles
-- Never nest `rsx!` macros inside `rsx!` macros
-- Always create subcomponents for reusable UI elements
-- Use `ReadOnlySignal<T>` for read-only props in components
-- Maintain clear separation between business logic and UI rendering
-- Follow consistent naming conventions across the codebase
+### Phase 3: Transfer Engine Enhancements
 
-### Data Flow Patterns
-- Use resources for async data loading
-- Implement proper error handling with Result types
-- Follow immutable-first patterns where possible
-- Use signals for reactive state management
-- Implement proper cleanup for async operations
+#### 3.1 Bidirectional Sync
+- Detect changes on both source and destination
+- Merge strategies (newest wins, manual resolve)
+- Conflict detection and flagging
+- Sync history and undo
 
-### UI/UX Guidelines
-- Maintain glassmorphic design language consistently
-- Ensure smooth animations for state transitions
-- Provide clear visual feedback for all interactions
-- Follow accessibility guidelines for keyboard navigation
-- Maintain responsive design for different screen sizes
+#### 3.2 Scheduled Intents
+- Cron-like scheduling (hourly, daily, weekly)
+- Sync on file change (filesystem watching)
+- Sync on drive connect
+- Pause/resume schedules
 
-## Risk Assessment & Mitigation
+#### 3.3 Remote Transfer (SSH/SFTP)
+- SSH key management
+- Connection pooling
+- Delta transfer (rsync-like)
+- Compression for slow links
+- Progress over network
 
-### Technical Risks
-- **Large graph performance**: Mitigate with lazy loading and optimized algorithms
-- **Database scalability**: Mitigate with proper indexing and query optimization
-- **Remote connection reliability**: Mitigate with robust retry mechanisms
-- **Memory usage**: Mitigate with proper resource management and cleanup
+#### 3.4 Performance Features
+- Bandwidth throttling
+- Parallel file transfers (configurable)
+- Skip unchanged files (hash + mtime)
+- Resume interrupted transfers
 
-### Schedule Risks
-- **Complexity underestimation**: Mitigate with regular progress reviews
-- **Dependency issues**: Mitigate with early prototyping of critical components
-- **Resource constraints**: Mitigate with prioritized feature development
-- **Integration challenges**: Mitigate with modular architecture
+**Deliverables:**
+- Set-and-forget sync relationships
+- Efficient remote transfers
+- Configurable performance tuning
+
+---
+
+### Phase 4: Platform Expansion
+
+#### 4.1 Web Frontend
+- Dioxus web target
+- Actix-web backend API
+- Real-time sync status via WebSocket
+- Same API as desktop
+
+#### 4.2 Linux Support
+- Inotify for filesystem watching
+- Udisks2 for drive detection
+- GTK file picker integration
+- AppImage/Flatpak distribution
+
+#### 4.3 Windows Support
+- ReadDirectoryChangesW for watching
+- WMI for drive detection
+- Native file picker
+- MSI installer
+
+#### 4.4 Cloud Destinations
+- S3-compatible storage
+- Google Drive
+- Dropbox
+- Backblaze B2
+
+**Deliverables:**
+- Cross-platform availability
+- Cloud backup options
+- Web-based monitoring
+
+---
+
+### Phase 5: Advanced Features
+
+#### 5.1 Versioning
+- Snapshot-based versioning
+- Point-in-time restore
+- Diff between versions
+- Configurable retention policies
+
+#### 5.2 Encryption
+- End-to-end encryption for transfers
+- Encrypted storage at destination
+- Key management
+- Per-intent encryption settings
+
+#### 5.3 Collaboration
+- Shared intents between users
+- Access control and permissions
+- Activity feed
+- Notifications (email, push)
+
+#### 5.4 Analytics
+- Transfer statistics dashboard
+- Bandwidth usage over time
+- Storage growth trends
+- Sync health monitoring
+
+**Deliverables:**
+- Enterprise-ready features
+- Compliance capabilities
+- Team collaboration
+
+---
+
+## Technical Debt
+
+### Immediate (Fix Before Phase 2)
+1. **Interaction conflicts** — Click vs drag ambiguity
+2. **No context menu** — Operations not discoverable
+3. **No keyboard shortcuts** — Power user workflows blocked
+
+### Short-term (Fix in Phase 2-3)
+1. **SurrealDB type coercion** — RecordId vs String issues (partially fixed)
+2. **Schema evolution** — Need migration system for schema changes
+3. **Error messages** — Some errors are cryptic
+
+### Long-term (Architectural)
+1. **Plugin system** — For custom transfer protocols
+2. **Scripting API** — Lua/JS automation
+3. **Microservices split** — Separate transfer daemon from UI
+
+---
 
 ## Success Metrics
 
-### Quantitative Metrics
-- Application startup time < 2 seconds
-- Graph rendering for 1000 nodes < 500ms
-- File transfer speeds comparable to native tools
-- Memory usage < 500MB for typical usage
-- Zero critical bugs in production release
+### User Experience
+- Time to create first sync: < 30 seconds
+- Time to resolve conflict: < 10 seconds
+- Keyboard shortcut adoption: > 40% of users
+- Context menu discoverability: > 80% find key actions
 
-### Qualitative Metrics
-- User satisfaction score > 4.0/5.0
-- Intuitive workflow with minimal learning curve
-- Consistent visual design language
-- Reliable operation with minimal crashes
-- Responsive user interface
+### Technical
+- App startup time: < 2 seconds
+- Sync latency (file change to transfer start): < 5 seconds
+- Memory usage: < 500MB for 1000 nodes
+- Transfer throughput: Within 10% of rsync
 
-## Conclusion
+### Business
+- User retention (30-day): > 60%
+- NPS score: > 40
+- Support tickets per 1000 users: < 10/month
 
-This development plan provides a structured approach to evolve Kip from its current working prototype to a production-ready file transfer orchestrator. The phased approach allows for iterative development with regular milestones and risk mitigation. Each phase builds upon the previous one while maintaining focus on core functionality before advancing to advanced features.
+---
+
+## Risk Assessment
+
+### High Risk
+1. **SurrealDB stability** — Embedded mode is relatively new
+   - Mitigation: Regular backups, migration path to client-server mode
+2. **Web performance** — Large graphs in browser
+   - Mitigation: Virtualization, level-of-detail rendering
+
+### Medium Risk
+1. **Cross-platform filesystem quirks** — Different semantics on Windows/Linux/macOS
+   - Mitigation: Extensive testing, abstraction layer
+2. **SSH key management** — Security-sensitive, platform-specific
+   - Mitigation: Use established libraries, security audit
+
+### Low Risk
+1. **UI framework changes** — Dioxus is stable but evolving
+   - Mitigation: Abstraction layer, pinned versions
+
+---
+
+## Appendix: File Structure
+
+```
+kip/
+├── src/
+│   ├── main.rs              # Desktop app entry
+│   ├── lib.rs               # Library root
+│   ├── bin/
+│   │   └── kip-cli.rs       # CLI binary
+│   ├── api/                 # API layer
+│   │   ├── mod.rs
+│   │   ├── intent.rs
+│   │   ├── location.rs
+│   │   ├── review.rs
+│   │   ├── query.rs
+│   │   └── config.rs
+│   ├── engine/              # Transfer engine
+│   │   ├── mod.rs
+│   │   ├── transfer.rs      # Chunked copier
+│   │   ├── scanner.rs       # Filesystem scanner
+│   │   └── scheduler.rs     # Job scheduler
+│   ├── db/                  # Database layer
+│   │   ├── mod.rs
+│   │   ├── schema.rs
+│   │   └── init.rs
+│   └── ui/                  # Dioxus UI
+│       ├── graph.rs
+│       ├── graph_nodes.rs
+│       ├── graph_edges.rs
+│       ├── graph_store.rs
+│       └── file_picker.rs
+├── crates/
+│   └── actix-dioxus-serve/  # Web serving (future)
+├── tests/                   # Integration tests
+└── notes/
+    └── the_design/          # This documentation
+```
+
+---
+
+## Document History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-02-13 | Initial draft | AI |
+| 2026-02-17 | Updated with Phase progress | AI |
+| 2026-02-22 | Major revision: accurate current state, expanded long-term | AI |
+

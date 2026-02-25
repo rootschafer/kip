@@ -1,252 +1,213 @@
 # Kip Implementation Summary
 
-**Last Updated:** February 17, 2026
-**Status:** Force-directed graph fully functional with all core interactions complete
+**Date:** February 22, 2026  
+**Status:** Accurate as of this date
 
 ---
 
-## Overview
+## What's Implemented
 
-Kip is a file synchronization orchestrator with a force-directed graph UI. Users visualize file locations across devices and create sync relationships by drawing edges between nodes.
+### Core Infrastructure ✅
 
----
+| Module | Status | Location |
+|--------|--------|----------|
+| **Database Layer** | ✅ Complete | `src/db/` |
+| **API Layer** | ✅ Complete | `src/api/` |
+| **CLI Binary** | ✅ Complete | `src/bin/kip-cli.rs` |
+| **Transfer Engine** | ✅ Complete | `src/engine/transfer.rs` |
+| **Filesystem Scanner** | ✅ Complete | `src/engine/scanner.rs` |
+| **Job Scheduler** | ✅ Complete | `src/engine/scheduler.rs` |
 
-## Current Implementation Status
+### UI Components ✅
 
-### ✅ COMPLETED - Force-Directed Graph System
+| Component | Status | Location |
+|-----------|--------|----------|
+| **Graph Workspace** | ✅ Complete | `src/ui/graph.rs` |
+| **Node Rendering** | ✅ Complete | `src/ui/graph_nodes.rs` |
+| **Edge Rendering** | ✅ Complete | `src/ui/graph_edges.rs` |
+| **Graph State** | ✅ Complete | `src/ui/graph_store.rs` |
+| **File Picker** | ✅ Complete | `src/ui/file_picker.rs` |
+| **Notifications** | ✅ Complete | `src/ui/notification.rs` |
+| **Review Queue** | ✅ Complete | `src/ui/review_queue.rs` |
 
-#### Physics Simulation (`src/ui/graph_store.rs`)
-- **Repulsion force** (forceManyBody equivalent): 2000.0 strength - nodes push apart aggressively
-- **Link attraction** (forceLink equivalent): 0.03 spring constant - connected nodes pull together
-- **Center gravity** (forceX/forceY equivalent): 0.003 strength - very weak pull to center
-- **Collision resolution** (forceCollide equivalent): 3 iterations, 0.7 strength
-- **Alpha decay**: 0.97 per tick, stops when < 0.001
-- **Edge length variation**:
-  - Sync edges: 250px
-  - Hierarchy edges: 180px
-  - Group edges: 120px
-- **Collision radii by node type**:
-  - Device/Machine: 45px
-  - Directory/Group: 30px
-  - File: 15px
+### Features ✅
 
-#### Simulation Loop (`src/ui/graph.rs`)
-- Runs at ~60fps when active (16ms tick)
-- Sleeps 100ms when idle to reduce CPU
-- Wrapped in `use_effect` to prevent infinite loops
-- Continuous loop (never exits, waits for sim_running)
-
-#### Infinite Canvas & Viewport
-- **Pan**: Alt+drag for 1:1 viewport movement
-- **Viewport state**: `viewport_x`, `viewport_y`, `viewport_scale` in Graph struct
-- **Transform**: CSS transform on container div (translate + scale)
-- **No boundaries**: Nodes can spread infinitely
-- **Zoom**: Button controls (+/-/Reset) in toolbar
-
-#### Drag-to-Move
-- **fx/fy fields** on GraphNode for fixed positions during drag
-- **fix_node_position()** - Sets fx/fy on drag start
-- **release_node_position()** - Clears fx/fy on drag end
-- **Restart simulation** after release to let node settle
-- **Multi-drag**: Shift+drag selects multiple, drag moves all together
-
-#### Filesystem Scanning
-- **scan_directory()** - Scans actual filesystem, creates nodes in orbit pattern
-- **Orbit positioning** - 300px radius around parent
-- **Hierarchy edges** - Automatically created for parent-child
-- **Trigger**: Click on machine/drive/directory node
-- **Directory expansion**: Click directory to scan and show children
-
-#### Edge Creation
-- **Ctrl/Alt+click** on node to start edge creation
-- **Rubber band line** follows cursor during drag
-- **Release on target node** to complete edge
-- **Database persistence**: Edge saved to intent table
-- **Visual feedback**: Dashed line preview
-
-#### Visual Enhancements
-- **Cluster backgrounds** - 350px radius circles, 8% opacity, machine/drive colors
-- **Edges behind nodes** - SVG z-index: 1, nodes render on top
-- **Edge preview line** - Transforms mouse coords to graph space for accurate tracking
-- **Node gradients** - Radial gradients for each node type (blue/green/slate)
-- **Selection glow** - Blue glow with animated dashed border
-- **Status indicators** - Syncing animation, error X overlay, offline grayscale
-
-### ✅ COMPLETED - Infrastructure
-
-1. **Database Layer** (`src/db.rs`)
-   - SurrealDB embedded connection
-   - Schema: machine, drive, location, intent, review_item
-   - Drive watcher for mount detection
-   - Query helpers for graph data
-
-2. **App Structure** (`src/app.rs`)
-   - Root component with global state
-   - `refresh_tick` signal for data refreshes
-   - `hostname` state
-   - Proper `use_effect` patterns (no infinite loops)
-
-3. **Graph Component** (`src/ui/graph.rs`)
-   - `MappingGraph` component
-   - `GraphToolbar` with machine chips
-   - Resource-based data loading
-   - Add machine panel
-
-4. **Graph State** (`src/ui/graph_store.rs`)
-   - `Graph` struct with nodes, edges, containers
-   - Signal-based state management
-   - Position persistence to database
-   - Drag state tracking (lasso, edge, node drag, panning)
-
-5. **Graph Rendering**
-   - **Nodes** (`src/ui/graph_nodes.rs`): FileNode, DirNode, GroupNode, MachineNode, DriveNode
-   - **Edges** (`src/ui/graph_edges.rs`): SVG overlay with bezier curves
-   - **Types** (`src/ui/graph_types.rs`): GraphNode, GraphEdge, NodeKind, Vec2
-
-6. **File Picker** (`src/ui/file_picker.rs`)
-   - Column-based navigation
-   - Multi-pane support
-   - Drag-to-workspace
-   - Persistent (minimizes, doesn't close)
-
-7. **Notification System** (`src/ui/notification.rs`)
-   - Toast notifications (info, warning, error, progress)
-   - Auto-dismiss with timeout
-   - Progress bar support
-
-8. **Review Queue** (`src/ui/review_queue.rs`)
-   - Conflict resolution UI
-   - Resolution actions (skip, overwrite, merge)
+| Feature | Status | Notes |
+|---------|--------|-------|
+| SurrealDB 3.0.0 integration | ✅ Working | Using stable release |
+| Location CRUD | ✅ Working | Via API layer |
+| Intent creation | ✅ Working | Via API layer |
+| Filesystem scanning | ✅ Working | Handles symlinks |
+| Chunked file copying | ✅ Working | With blake3 hashing |
+| Job scheduling | ✅ Working | Bounded concurrency (4) |
+| Error classification | ✅ Working | Retryable vs needs-review |
+| Force-directed layout | ✅ Working | Cluster separation tuned |
+| Lasso selection | ✅ Working | Area select |
+| Multi-drag | ✅ Working | Move multiple nodes |
+| Edge creation | ✅ Working | Drag to connect |
 
 ---
 
-### ✅ COMPLETED - Core Interactions (P0)
+## What's Partially Implemented ⚠️
 
-#### 1. Zoom Functionality
-**Status:** COMPLETE - Button controls implemented
-**Location:** `src/ui/graph.rs` - GraphToolbar component
-
-**Implementation:**
-- Zoom buttons (+/-/Reset) in toolbar
-- `zoom()` method in Graph struct
-- Zooms toward center point (600, 400)
-- Range: 0.1x to 5.0x
-
-**Note:** Wheel zoom still not working due to Dioxus API incompatibility
+| Feature | Status | Issue |
+|---------|--------|-------|
+| **Orbit view** | ⚠️ Partial | Directory expansion works but children don't fan out in circle |
+| **Enter view** | ⚠️ Partial | Navigation into directories not fully working |
+| **Click behavior** | ⚠️ Conflicted | Single click selects AND starts drag |
+| **Context menus** | ⚠️ Not implemented | Design complete, code pending |
+| **Keyboard shortcuts** | ⚠️ Not implemented | Design complete, code pending |
 
 ---
 
-#### 2. Directory Expansion (Click to Expand)
-**Status:** COMPLETE - Filesystem scan for directories
+## What's Not Implemented ❌
 
-**What Works:**
-- Click machine/drive → scans filesystem
-- Click directory → scans that directory's contents
-- Children appear in orbit around parent
-- Works recursively (expand children too)
-- Scanning status shown in toolbar
-
-**Implementation:**
-- Extended scan logic to Directory nodes
-- Passes directory path to scan function
-- Shows "Scanning..." status during async scan
+| Feature | Priority | Notes |
+|---------|----------|-------|
+| Node grouping | LOW | Collapse multiple nodes into container |
+| Layout persistence | LOW | Save/restore node positions |
+| Bidirectional sync | MEDIUM | Detect changes on both sides |
+| Scheduled intents | MEDIUM | Cron-like scheduling |
+| SSH/SFTP transfer | MEDIUM | Remote machine transfers |
+| Web frontend | LOW | Dioxus web + Actix backend |
+| Linux/Windows support | LOW | Platform-specific integrations |
 
 ---
 
-#### 3. Edge Creation (Drag to Create Sync)
-**Status:** COMPLETE - Full edge creation flow
+## Known Issues
 
-**What Works:**
-- Ctrl/Alt+click starts edge creation
-- Rubber band line follows cursor
-- Release on target node completes edge
-- Edge created in database (intent table)
-- Graph refreshes to show new edge
+### SurrealDB Type Coercion (Partially Fixed)
 
-**Implementation:**
-- Added onmouseup handler in workspace
-- Calls `create_edge_in_db()` on drop
-- Triggers refresh via `on_changed` event
+**Issue:** SurrealDB 3.0.0 sometimes fails with "Expected any, got record" when querying tables with record-type fields.
 
----
+**Status:** Fixed for `IntentRow` by using `String` instead of `RecordId` and `string::slice()` in queries.
 
-#### 4. Lasso Selection & Multi-Drag
-**Status:** COMPLETE - Full multi-select and drag
+**Remaining:** May need similar fixes for other record-type queries.
 
-**What Works:**
-- Shift+drag creates selection rectangle
-- `select_in_rect()` selects nodes in area
-- Drag moves all selected nodes together
-- Release saves positions for all selected
+### Click/Drag Conflict (Not Fixed)
 
-**Implementation:**
-- Track all selected nodes during drag
-- Apply same delta offset to all selected
-- Release all on drag end
-- Save positions to DB for all
+**Issue:** Single click on a node both selects it AND starts drag, making precise selection difficult.
+
+**Status:** Design complete (see `INTERACTION_MODEL.md`), implementation pending.
+
+**Fix Required:**
+- Single click → select only
+- Click + drag → move
+- Double click → context menu
+
+### No Context Menus (Not Fixed)
+
+**Issue:** Node operations not discoverable, no keyboard shortcuts.
+
+**Status:** Design complete (see `INTERACTION_MODEL.md`), implementation pending.
 
 ---
 
-### ✅ COMPLETED - Visual Polish (P1)
+## Test Coverage
 
-#### 5. Node Visual Design
-**Status:** COMPLETE - Gradients, glow, and polish
+### Unit Tests
 
-**Implementation:**
-- Radial gradients for each node type:
-  - Machine: blue (#60a5fa → #1d4ed8)
-  - Drive: green (#34d399 → #059669)
-  - Directory: slate (#94a3b8 → #334155)
-  - Group: emerald (#34d399 → #059669)
-- Selection glow with animated dashed border
-- Hover scale effect
-- Size based on descendant count (via inline style)
+| Test Suite | Passing | Ignored | Failed |
+|------------|---------|---------|--------|
+| `api_tests` | 10 | 2 | 0 |
+| `integration_tests` | 4 | 5 | 0 |
+
+**Ignored tests:** Due to SurrealDB type coercion issues (being fixed incrementally).
 
 ---
 
-#### 6. Status Indicators
-**Status:** COMPLETE - CSS-based indicators
+## Build Status
 
-**Implementation:**
-- Syncing: Pulsing border animation
-- Error: Red X overlay (CSS ::after)
-- Offline: Grayscale filter, reduced opacity
-- Selected: Blue glow with dashed rotating border
+```bash
+# Desktop app
+dx build                        # ✅ Passes
+dx serve --platform desktop     # ✅ Runs
 
----
+# CLI
+cargo build --bin kip-cli       # ✅ Passes
 
-### ❌ REMAINING / FUTURE WORK
-
-#### 7. Node Grouping
-**Status:** NOT IMPLEMENTED
-
-**What's Missing:**
-- Group creation from selected nodes
-- Group node rendering (container circle)
-- Group expand/collapse
-- Edge merging for grouped nodes
-
-**Reference:** `App.tsx` - `handleGroupNodes()`
+# Tests
+cargo test --test api_tests     # ✅ 10 passing, 2 ignored
+cargo test --test integration_tests  # ✅ 4 passing, 5 ignored
+```
 
 ---
 
-#### 8. Performance with 1000+ Nodes
-**Status:** UNTESTED
+## File Changes (Recent)
 
-**Potential Optimizations:**
-- Barnes-Hut approximation for repulsion (O(n log n) vs O(n²))
-- Spatial hashing for collision detection
-- Limit visible nodes (virtual scrolling)
-- Reduce simulation tick rate when many nodes
+### Added
+- `src/api/` — API layer modules
+- `src/bin/kip-cli.rs` — CLI binary
+- `src/db/` — Database module
+- `src/engine/transfer.rs` — Renamed from `copier.rs`
+- `src/lib.rs` — Library root
+- `tests/` — Test infrastructure
+- `crates/actix-dioxus-serve/` — Web serving library
+- `notes/new_arch/` — Architecture documentation
+
+### Modified
+- `Cargo.toml` — Added dependencies (clap, actix-web, etc.)
+- `src/main.rs` — Feature-gated for desktop/web
+- `src/ui/graph.rs` — Fixed simulation restart logic
+- `src/ui/graph_edges.rs` — Removed cluster backgrounds
+- `src/ui/graph_store.rs` — Fixed IntentRow type coercion
+- `assets/main.css` — Removed debug styling
+
+### Removed
+- `src/db.rs` — Moved to `src/db/mod.rs`
+- `src/engine/copier.rs` — Renamed to `transfer.rs`
 
 ---
 
-#### 9. Edge Cases
-- [ ] Empty state (no machines)
-- [ ] Single node
-- [ ] 1000+ nodes (performance)
-- [ ] Disconnected machine (show offline state)
-- [ ] Very long paths (truncate labels)
+## Document Accuracy
+
+### Accurate Documents ✅
+
+These documents reflect current state:
+
+- `START_HERE.md` — Updated Feb 22
+- `COMPREHENSIVE_DEVELOPMENT_PLAN.md` — Updated Feb 22
+- `INTERACTION_MODEL.md` — New, Feb 22
+- `new_arch/*` — Accurate architecture docs
+
+### Outdated Documents ⚠️
+
+These contain outdated information:
+
+- `KIP_DESIGN_1.md` through `KIP_DESIGN_6.md` — Early design thinking
+- `Phase1/` through `Phase4/` — Original phase plans (superseded)
+- `NEXT_AGENT_HANDOFF.md` — Previous handoff notes
+- `CIRCULAR_NODES_PROGRESS.md` — Superseded by current state
+
+**Note:** Outdated documents may still have useful context but should not be relied upon for current implementation details.
 
 ---
-- Release all on drag end
+
+## Next Steps
+
+### Immediate (Phase 1)
+1. Fix click/drag conflict
+2. Implement context menus
+3. Add keyboard shortcuts
+
+### Short-term (Phase 2)
+1. Complete orbit view
+2. Implement enter view
+3. Add node grouping
+4. Layout persistence
+
+### Long-term (Phase 3+)
+1. Bidirectional sync
+2. Scheduled intents
+3. SSH/SFTP support
+4. Web frontend
+
+---
+
+## Document History
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2026-02-17 | Initial version | AI |
+| 2026-02-22 | Major revision: accurate current state | AI |
+

@@ -80,6 +80,45 @@ pub enum DragState {
 	},
 }
 
+// ─── Context menu state ───────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ContextMenuState {
+	pub visible: bool,
+	pub x: f64,
+	pub y: f64,
+	pub node_id: Option<String>,
+}
+
+impl ContextMenuState {
+	pub fn new() -> Self {
+		Self {
+			visible: false,
+			x: 0.0,
+			y: 0.0,
+			node_id: None,
+		}
+	}
+
+	pub fn show(&mut self, x: f64, y: f64, node_id: String) {
+		self.visible = true;
+		self.x = x;
+		self.y = y;
+		self.node_id = Some(node_id);
+	}
+
+	pub fn hide(&mut self) {
+		self.visible = false;
+		self.node_id = None;
+	}
+}
+
+impl Default for ContextMenuState {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 // ─── Graph state ──────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq)]
@@ -90,6 +129,7 @@ pub struct Graph {
 	pub sim_running: bool,
 	pub selected: HashSet<String>,
 	pub drag_state: DragState,
+	pub context_menu: ContextMenuState,
 	pub containers: Vec<ContainerView>,
 	pub review_count: i64,
 	// Filesystem scanning state
@@ -110,6 +150,7 @@ impl Graph {
 			sim_running: false,
 			selected: HashSet::new(),
 			drag_state: DragState::None,
+			context_menu: ContextMenuState::new(),
 			containers: Vec::new(),
 			review_count: 0,
 			scanning: None,

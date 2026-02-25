@@ -1,6 +1,7 @@
 pub mod container_components;
 pub mod file_picker;
 pub mod graph;
+pub mod graph_context_menu;
 pub mod graph_edges;
 pub mod graph_nodes;
 pub mod graph_store;

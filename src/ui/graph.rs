@@ -6,6 +6,7 @@ use crate::{
 	ui::{
 		container_components::*,
 		file_picker::*,
+		graph_context_menu::*,
 		graph_edges::*,
 		graph_nodes::*,
 		graph_store::{load_graph_data, Graph},
@@ -118,6 +119,96 @@ pub fn MappingGraph(
 
 	// Create the main graph state as a signal
 	let mut graph = use_signal(|| Graph::new());
+
+	// Inject JavaScript to handle right-click context menu on nodes
+	// This bypasses Dioxus event limitations by listening directly in the WebView
+	use_effect(move || {
+		let mut graph_signal = graph;
+		spawn(async move {
+			// JavaScript to inject context menu handling
+			let js_code = r#"
+			(function() {
+				// Remove any existing listener to prevent duplicates
+				if (window.__kipContextMenuInstalled) {
+					document.removeEventListener('contextmenu', window.__kipContextMenuHandler, true);
+				}
+				
+				window.__kipContextMenuHandler = async function(e) {
+					// Check if we clicked on a graph node
+					const node = e.target.closest('.graph-node');
+					if (!node) return;
+					
+					// Prevent default context menu
+					e.preventDefault();
+					e.stopPropagation();
+					
+					// Get node ID from the element
+					const nodeId = node.getAttribute('data-node-id');
+					if (!nodeId) return;
+					
+					// Get viewport transform
+					const workspace = document.getElementById('workspace');
+					const style = window.getComputedStyle(workspace);
+					const transform = style.transform;
+					
+					// Parse transform matrix to get scale and translation
+					let scaleX = 1, scaleY = 1, translateX = 0, translateY = 0;
+					if (transform && transform !== 'none') {
+						const matrix = transform.match(/matrix.*\((.+)\)/);
+						if (matrix) {
+							const values = matrix[1].split(',').map(parseFloat);
+							scaleX = values[0];
+							scaleY = values[3];
+							translateX = values[4];
+							translateY = values[5];
+						}
+					}
+					
+					// Calculate graph-space coordinates
+					const rect = workspace.getBoundingClientRect();
+					const graphX = (e.clientX - rect.left - translateX) / scaleX;
+					const graphY = (e.clientY - rect.top - translateY) / scaleY;
+					
+					// Send to Rust
+					dioxus.send({
+						type: 'contextmenu',
+						nodeId: nodeId,
+						x: graphX,
+						y: graphY
+					});
+				};
+				
+				document.addEventListener('contextmenu', window.__kipContextMenuHandler, true);
+				window.__kipContextMenuInstalled = true;
+			})();
+			"#;
+
+			// Inject the JavaScript
+			let mut eval = document::eval(js_code);
+
+			// Listen for context menu events from JavaScript
+			loop {
+				match eval.recv::<serde_json::Value>().await {
+					Ok(msg) => {
+						if let Some(event_type) = msg.get("type").and_then(|v| v.as_str()) {
+							if event_type == "contextmenu" {
+								if let (Some(node_id), Some(x), Some(y)) = (
+									msg.get("nodeId").and_then(|v| v.as_str()),
+									msg.get("x").and_then(|v| v.as_f64()),
+									msg.get("y").and_then(|v| v.as_f64()),
+								) {
+									graph_signal.with_mut(|g| {
+										g.context_menu.show(x, y, node_id.to_string());
+									});
+								}
+							}
+						}
+					}
+					Err(_) => break,
+				}
+			}
+		});
+	});
 
 	// Load graph data from DB when refresh_tick changes
 	let db_for_resource = db.clone();
@@ -569,6 +660,8 @@ pub fn MappingGraph(
 					}
 				}
 				}
+				// Context menu (rendered outside viewport transform so it stays fixed on screen)
+				GraphNodeContextMenu { graph }
 			}
 
 			// Add machine panel
