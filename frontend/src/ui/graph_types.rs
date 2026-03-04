@@ -65,8 +65,57 @@ impl SubAssign for Vec2 {
 // ─── Node types ───────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum FileType {
+	Code,      // .rs, .js, .py, .ts, .cpp, .h, etc
+	Document,  // .txt, .md, .pdf, .doc, etc
+	Config,    // .json, .yaml, .toml, .ini, .env, etc
+	Image,     // .png, .jpg, .gif, .svg, etc
+	Audio,     // .mp3, .wav, .flac, etc
+	Video,     // .mp4, .mov, .avi, etc
+	Archive,   // .zip, .tar, .gz, .7z, etc
+	Binary,    // Executables, compiled files
+	Unknown,   // Everything else
+}
+
+impl FileType {
+	pub fn from_path(path: &str) -> Self {
+		let ext = std::path::Path::new(path)
+			.extension()
+			.and_then(|e| e.to_str())
+			.unwrap_or("")
+			.to_lowercase();
+		
+		match ext.as_str() {
+			"rs" | "js" | "ts" | "jsx" | "tsx" | "py" | "cpp" | "c" | "h" | "hpp" | "go" | "rb" | "sh" | "bash" | "zsh" => FileType::Code,
+			"txt" | "md" | "markdown" | "pdf" | "doc" | "docx" | "rtf" | "odt" => FileType::Document,
+			"json" | "yaml" | "yml" | "toml" | "ini" | "env" | "config" | "cfg" => FileType::Config,
+			"png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "ico" | "bmp" => FileType::Image,
+			"mp3" | "wav" | "flac" | "aac" | "ogg" | "m4a" => FileType::Audio,
+			"mp4" | "mov" | "avi" | "mkv" | "webm" | "wmv" => FileType::Video,
+			"zip" | "tar" | "gz" | "7z" | "rar" | "bz2" | "xz" => FileType::Archive,
+			"exe" | "dll" | "so" | "dylib" | "bin" | "app" => FileType::Binary,
+			_ => FileType::Unknown,
+		}
+	}
+	
+	pub fn icon(&self) -> &'static str {
+		match self {
+			FileType::Code => "📝",
+			FileType::Document => "📄",
+			FileType::Config => "⚙️",
+			FileType::Image => "🖼️",
+			FileType::Audio => "🎵",
+			FileType::Video => "🎬",
+			FileType::Archive => "📦",
+			FileType::Binary => "⚡",
+			FileType::Unknown => "📎",
+		}
+	}
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum NodeKind {
-	File,
+	File { file_type: FileType },
 	Directory { expanded: bool },
 	Group { expanded: bool },
 	Machine { expanded: bool },
@@ -223,7 +272,7 @@ const MACHINE_SIZE: f64 = 70.0;
 
 pub fn node_dimensions(kind: &NodeKind, child_count: usize) -> (f64, f64) {
 	match kind {
-		NodeKind::File => (NODE_WIDTH_FILE, NODE_HEIGHT_FILE),
+		NodeKind::File { .. } => (NODE_WIDTH_FILE, NODE_HEIGHT_FILE),
 		NodeKind::Directory { .. } | NodeKind::Group { .. } => {
 			let size = (DIR_MIN_SIZE + (1.0 + child_count as f64).ln() * 10.0).clamp(DIR_MIN_SIZE, DIR_MAX_SIZE);
 			(size, size)

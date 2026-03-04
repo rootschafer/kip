@@ -1217,6 +1217,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
 
 [[package]]
+name = "cli"
+version = "0.1.0"
+
+[[package]]
 name = "cmake"
 version = "0.1.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1431,6 +1435,10 @@ dependencies = [
  "time",
  "url",
 ]
+
+[[package]]
+name = "core"
+version = "0.1.0"
 
 [[package]]
 name = "core-foundation"
@@ -1666,6 +1674,10 @@ dependencies = [
  "quote",
  "syn 2.0.115",
 ]
+
+[[package]]
+name = "daemon"
+version = "0.1.0"
 
 [[package]]
 name = "darling"
@@ -2830,6 +2842,37 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "frontend"
+version = "0.1.0"
+dependencies = [
+ "actix-dioxus-serve",
+ "actix-files",
+ "actix-web",
+ "actix-web-flash-messages",
+ "blake3",
+ "chrono",
+ "clap",
+ "dioxus",
+ "dirs 5.0.1",
+ "plist",
+ "rfd 0.15.4",
+ "serde",
+ "serde_json",
+ "surrealdb",
+ "surrealdb-types",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "toml",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "ulid",
+ "walkdir",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]
@@ -4236,37 +4279,6 @@ dependencies = [
  "bitflags 2.10.0",
  "serde",
  "unicode-segmentation",
-]
-
-[[package]]
-name = "kip"
-version = "0.1.0"
-dependencies = [
- "actix-dioxus-serve",
- "actix-files",
- "actix-web",
- "actix-web-flash-messages",
- "blake3",
- "chrono",
- "clap",
- "dioxus",
- "dirs 5.0.1",
- "plist",
- "rfd 0.15.4",
- "serde",
- "serde_json",
- "surrealdb",
- "surrealdb-types",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "toml",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "ulid",
- "walkdir",
- "wasm-bindgen-futures",
 ]
 
 [[package]]

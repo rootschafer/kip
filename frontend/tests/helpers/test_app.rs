@@ -5,7 +5,8 @@
 
 use std::path::PathBuf;
 
-use kip::db::{self, DbHandle};
+// use kip::db::{self, DbHandle};
+use frontend::db::{self, DbHandle};
 use tempfile::TempDir;
 
 /// Test application fixture with isolated in-memory database

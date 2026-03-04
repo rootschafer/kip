@@ -8,7 +8,7 @@ use crate::{db::DbHandle, ui::graph_types::*};
 // ─── Force simulation constants ───────────────────────────────
 
 // D3 force equivalents - tuned for cluster separation
-const REPULSION: f64 = 2000.0; // forceManyBody strength (increased for better separation)
+const REPULSION: f64 = 1500.0; // Reduced from 2500 - was pushing too far apart
 const SPRING_K: f64 = 0.03; // Link force strength (reduced - less tension)
 const CENTER_GRAVITY: f64 = 0.003; // forceX/forceY strength (very weak - clusters stay separate)
 const DAMPING: f64 = 0.85; // Velocity damping per tick
@@ -34,11 +34,12 @@ fn get_edge_length(_edge: &GraphEdge) -> f64 {
 }
 
 /// Get collision radius based on node type
+/// File nodes are rectangular (150x36), so use larger radius for proper spacing
 fn get_collision_radius(node: &GraphNode) -> f64 {
 	match &node.kind {
-		NodeKind::Machine { .. } | NodeKind::Drive { .. } => 45.0,
-		NodeKind::Directory { .. } | NodeKind::Group { .. } => 30.0,
-		NodeKind::File => 15.0,
+		NodeKind::Machine { .. } | NodeKind::Drive { .. } => 40.0, // Reduced from 45
+		NodeKind::Directory { .. } | NodeKind::Group { .. } => 28.0, // Reduced from 30
+		NodeKind::File { .. } => 40.0, // Increased from 15 - files are rectangular (150x36)
 	}
 }
 
@@ -233,7 +234,7 @@ impl Graph {
 				| NodeKind::Drive { expanded, .. } => {
 					*expanded = new_expanded;
 				}
-				NodeKind::File => {
+				NodeKind::File { .. } => {
 					// Files are not expandable, do nothing
 					return;
 				}
@@ -605,6 +606,14 @@ fn apply_forces(nodes: &mut [GraphNode], edges: &[GraphEdge], alpha: f64) {
 	}
 
 	// 3. Parent-child springs (hierarchy clustering)
+	// Count children for each parent to adjust spacing
+	let mut child_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+	for &i in &visible {
+		if let Some(ref pid) = nodes[i].parent_id {
+			*child_counts.entry(pid.clone()).or_insert(0) += 1;
+		}
+	}
+
 	let parent_pairs: Vec<(usize, usize)> = visible
 		.iter()
 		.filter_map(|&i| {
@@ -624,16 +633,71 @@ fn apply_forces(nodes: &mut [GraphNode], edges: &[GraphEdge], alpha: f64) {
 			continue;
 		}
 
+		// Calculate target distance based on number of siblings and node type
+		// Files orbit further out than folders to reduce visual clutter
+		let parent_id = nodes[parent_idx].id.clone();
+		let sibling_count = child_counts.get(&parent_id).copied().unwrap_or(1);
+		
+		// Different base distances by node type
+		let is_file = matches!(nodes[child_idx].kind, crate::ui::graph_types::NodeKind::File { .. });
+		let base_distance = if is_file { 100.0 } else { 70.0 }; // Files further out
+		let distance_per_child = 8.0; // More subtle scaling
+		let target_dist = base_distance + (sibling_count as f64 * distance_per_child).min(100.0);
+
 		let delta = nodes[parent_idx].center() - nodes[child_idx].center();
 		let dist = delta.length().max(1.0);
-		let displacement = dist - 80.0; // Short parent-child distance
-		let force = delta.normalized() * 0.08 * displacement * alpha;
+		let displacement = dist - target_dist;
+		
+		// Gentle spring to prevent oscillation
+		let spring_k = 0.05;
+		let force = delta.normalized() * spring_k * displacement * alpha;
 
 		if !c_fixed && !nodes[child_idx].pinned {
 			nodes[child_idx].velocity += force;
 		}
 		if !p_fixed && !nodes[parent_idx].pinned {
-			nodes[parent_idx].velocity -= force * 0.3; // Parents resist movement more
+			nodes[parent_idx].velocity -= force * 0.2;
+		}
+	}
+
+	// 3b. Sibling repulsion - nodes with same parent repel each other more strongly
+	// This prevents children from clustering too tightly around parent
+	let mut siblings_by_parent: std::collections::HashMap<String, Vec<usize>> = std::collections::HashMap::new();
+	for &i in &visible {
+		if let Some(ref pid) = nodes[i].parent_id {
+			siblings_by_parent.entry(pid.clone()).or_insert_with(Vec::new).push(i);
+		}
+	}
+
+	for (_parent_id, siblings) in siblings_by_parent.iter() {
+		if siblings.len() < 2 {
+			continue;
+		}
+		// Moderate repulsion between siblings - enough to spread but not too far
+		let sibling_repulsion_strength = 800.0; // Reduced from 3000
+		for i in 0..siblings.len() {
+			for j in (i + 1)..siblings.len() {
+				let ai = siblings[i];
+				let bi = siblings[j];
+
+				let a_fixed = nodes[ai].fx.is_some() && nodes[ai].fy.is_some();
+				let b_fixed = nodes[bi].fx.is_some() && nodes[bi].fy.is_some();
+				if a_fixed && b_fixed {
+					continue;
+				}
+
+				let delta = nodes[bi].center() - nodes[ai].center();
+				let dist = delta.length().max(1.0);
+				let force_mag = sibling_repulsion_strength / (dist * dist);
+				let force = delta.normalized() * force_mag * alpha;
+
+				if !a_fixed && !nodes[ai].pinned {
+					nodes[ai].velocity -= force;
+				}
+				if !b_fixed && !nodes[bi].pinned {
+					nodes[bi].velocity += force;
+				}
+			}
 		}
 	}
 
@@ -932,7 +996,7 @@ async fn load_nodes(db: &DbHandle, containers: &[ContainerView]) -> Result<Vec<G
 		let kind = if is_dir {
 			NodeKind::Directory { expanded: false }
 		} else {
-			NodeKind::File
+			NodeKind::File { file_type: crate::ui::graph_types::FileType::Unknown }
 		};
 
 		let (w, h) = node_dimensions(&kind, child_count);
@@ -1190,6 +1254,13 @@ pub async fn scan_directory(
 
 		let is_dir = entry_path.is_dir();
 		let full_path = entry_path.to_string_lossy().to_string();
+		
+		// Detect file type for files
+		let file_type = if is_dir {
+			crate::ui::graph_types::FileType::Unknown
+		} else {
+			crate::ui::graph_types::FileType::from_path(&full_path)
+		};
 
 		// Calculate orbit position
 		let angle = (i as f64 / total) * 2.0 * PI;
@@ -1203,7 +1274,7 @@ pub async fn scan_directory(
 			kind: if is_dir {
 				NodeKind::Directory { expanded: false }
 			} else {
-				NodeKind::File
+				NodeKind::File { file_type }
 			},
 			parent_id: Some(parent_id.to_string()),
 			color: "#4a9eff".to_string(),
@@ -1211,8 +1282,8 @@ pub async fn scan_directory(
 			velocity: Vec2::default(),
 			pinned: false,
 			visible: true,
-			width: if is_dir { 60.0 } else { 150.0 },
-			height: if is_dir { 60.0 } else { 36.0 },
+			width: if is_dir { 60.0 } else { 70.0 }, // Reduced width for new layout
+			height: if is_dir { 60.0 } else { 56.0 }, // Increased height for icon+label
 			fx: None,
 			fy: None,
 		});

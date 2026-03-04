@@ -458,25 +458,40 @@ body {
 /* ─── File nodes (pills) ─── */
 .graph-node.file-node {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    padding: 8px 10px;
+    justify-content: center;
+    padding: 6px 8px;
     background: var(--glass-strong);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-sm);
-    min-width: 120px;
-    max-width: 200px;
+    min-width: 70px;
+    max-width: 120px;
+    gap: 4px;
 }
 .graph-node.file-node:hover {
     background: var(--glass-hover);
     border-color: rgba(255, 255, 255, 0.12);
 }
+.graph-node.file-node .file-node-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+.graph-node.file-node .file-node-icon {
+    font-size: 20px;
+    line-height: 1;
+}
 .graph-node.file-node .node-label {
-    font-size: 12px;
+    font-size: 10px;
     font-family: 'SF Mono', 'Fira Code', monospace;
     color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    max-width: 100%;
+    text-align: center;
 }
 
 /* ─── Directory nodes (circles) ─── */

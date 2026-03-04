@@ -3,7 +3,8 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use kip::{api, db};
+// use kip::{api, db};
+use frontend::{api, db};
 
 #[derive(Parser)]
 #[command(name = "kip")]

@@ -4,7 +4,8 @@ mod helpers;
 use std::path::PathBuf;
 
 use helpers::TestApp;
-use kip::api;
+// use kip::api;
+use frontend::api;
 
 // ========================================================================
 // Location API Tests

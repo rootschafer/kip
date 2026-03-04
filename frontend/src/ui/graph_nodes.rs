@@ -10,7 +10,7 @@ use crate::ui::{
 #[component]
 pub fn GraphNodeComponent(graph: Signal<Graph>, node: GraphNode) -> Element {
 	match &node.kind {
-		NodeKind::File => rsx! {
+		NodeKind::File { .. } => rsx! {
 			FileNode { graph, node }
 		},
 		NodeKind::Directory { .. } => rsx! {
@@ -29,6 +29,7 @@ pub fn GraphNodeComponent(graph: Signal<Graph>, node: GraphNode) -> Element {
 }
 
 // ─── FileNode ──────────────────────────────────────────────────
+// Icon + label vertical layout
 
 #[component]
 pub fn FileNode(graph: Signal<Graph>, node: GraphNode) -> Element {
@@ -42,6 +43,12 @@ pub fn FileNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 	let width = node.width;
 	let height = node.height;
 	let is_selected = graph().selected.contains(&node_id);
+	
+	// Get file type icon
+	let file_icon = match &node.kind {
+		NodeKind::File { file_type } => file_type.icon(),
+		_ => "📎",
+	};
 
 	let class = if is_selected {
 		"graph-node file-node selected"
@@ -112,7 +119,10 @@ pub fn FileNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 					_ => {}
 				}
 			},
-			span { class: "node-label", "{label}" }
+			div { class: "file-node-content",
+				span { class: "file-node-icon", "{file_icon}" }
+				span { class: "node-label", "{label}" }
+			}
 		}
 	}
 }
