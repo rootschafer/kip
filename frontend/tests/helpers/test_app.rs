@@ -5,8 +5,7 @@
 
 use std::path::PathBuf;
 
-// use kip::db::{self, DbHandle};
-use frontend::db::{self, DbHandle};
+use daemon::db::{self, DbHandle};
 use tempfile::TempDir;
 
 /// Test application fixture with isolated in-memory database
@@ -48,16 +47,16 @@ impl TestApp {
 
 	/// Create a test location at the given path
 	pub async fn create_test_location(&self, path: PathBuf, label: Option<String>) -> String {
-		kip::api::add_location(&self.db, path, label, None)
+		crate::api::add_location(&self.db, path, label, None)
 			.await
 			.expect("Failed to create test location")
 	}
 
 	/// Create a test intent between source and destinations
 	pub async fn create_test_intent(&self, source_id: String, dest_ids: Vec<String>, name: Option<String>) -> String {
-		let config = kip::api::IntentConfig { name, priority: 500, ..Default::default() };
+		let config = crate::api::IntentConfig { name, priority: 500, ..Default::default() };
 
-		kip::api::create_intent(&self.db, source_id, dest_ids, config)
+		crate::api::create_intent(&self.db, source_id, dest_ids, config)
 			.await
 			.expect("Failed to create test intent")
 	}

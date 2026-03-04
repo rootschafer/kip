@@ -1,28 +1,15 @@
 [package]
 name = "frontend"
-# name = "kip"
 version = "0.1.0"
 authors = ["Anders <git@anders.place>"]
 edition = "2021"
 
 [features]
-default = [
-    "desktop",
-    "safe_mode",
-]
-mobile = ["dioxus/mobile"]
-
+default = ["desktop", "safe_mode"]
 desktop = [
     "dioxus/desktop",
-    "surrealdb",
-    "surrealdb-types",
     "tokio",
     "rfd",
-    "tracing-appender",
-    "walkdir",
-    "blake3",
-    "dirs",
-    "ulid",
 ]
 safe_mode = []
 web = [
@@ -30,135 +17,41 @@ web = [
     "wasm-bindgen-futures",
 ]
 
-# These featurs will be obsolete when we move the "backend" stuff to the `daemon` crate
-backend = [
-    "actix-web",
-    "actix-files",
-    "actix-web-flash-messages",
-    "actix-dioxus-serve",
-]
-
-# [workspace]
-# members = [
-#     "cli",
-#     "core",
-#     "crates/actix-dioxus-serve",
-#     "frontend", "frontend",
-# ]
-
-[[bin]]
-name = "kip-backend"
-path = "src/bin/backend.rs"
-required-features = ["backend"]
+# [[bin]]
+# name = "kip"
+# path = "src/main.rs"
 
 [dependencies]
-# plist = "1"
+# Internal crates
+kip-core = { path = "../kip-core" }
+daemon = { path = "../daemon" }
+
+# Workspace dependencies
 plist = { workspace = true }
-# serde_json = "1"
 serde_json = { workspace = true }
-# thiserror = "2"
 thiserror = { workspace = true }
-# toml = "0.8"
 toml = { workspace = true }
-# tracing = "0.1"
 tracing = { workspace = true }
-# tracing-subscriber = "0.3.22"
 tracing-subscriber = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true }
+serde = { workspace = true }
+surrealdb-types = { workspace = true }
+surrealdb = { workspace = true }
+dirs = { workspace = true }
+walkdir = { workspace = true }
+blake3 = { workspace = true }
+ulid = { workspace = true }
 
-[dependencies.actix-dioxus-serve]
-# path = "../crates/actix-dioxus-serve"
-workspace = true
-optional = true
+# Dioxus
+dioxus = { workspace = true, features = ["router", "signals"] }
 
-[dependencies.actix-files]
-# version = "0.6"
-workspace = true
-optional = true
+# Optional desktop features
+tokio = { workspace = true, features = ["full"], optional = true }
+rfd = { workspace = true, optional = true }
 
-[dependencies.actix-web]
-# version = "4"
-workspace = true
-optional = true
-
-[dependencies.actix-web-flash-messages]
-# version = "0.5"
-workspace = true
-optional = true
-
-[dependencies.blake3]
-# version = "1"
-workspace = true
-optional = true
-
-[dependencies.chrono]
-# version = "0.4"
-workspace = true
-features = ["serde"]
-
-[dependencies.clap]
-# version = "4.4"
-workspace = true
-features = ["derive"]
-
-[dependencies.dioxus]
-# version = "0.7.3"
-workspace = true
-features = [
-    "router",
-    "signals",
-]
-
-[dependencies.dirs]
-# version = "5.0"
-workspace = true
-optional = true
-
-[dependencies.rfd]
-# version = "0.15"
-workspace = true
-optional = true
-
-[dependencies.serde]
-# version = "1"
-workspace = true
-features = ["derive"]
-
-[dependencies.surrealdb]
-# version = "3.0.0"
-workspace = true
-features = ["kv-surrealkv"]
-optional = true
-
-[dependencies.surrealdb-types]
-# version = "3.0.0"
-workspace = true
-optional = true
-
-[dependencies.tokio]
-# version = "1"
-workspace = true
-features = ["full"]
-optional = true
-
-[dependencies.tracing-appender]
-# version = "0.2.4"
-workspace = true
-optional = true
-
-[dependencies.ulid]
-# version = "1.1"
-workspace = true
-optional = true
-
-[dependencies.walkdir]
-version = "2"
-optional = true
-
-[dependencies.wasm-bindgen-futures]
-version = "0.4"
-optional = true
+# Web features
+wasm-bindgen-futures = { version = "0.4", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
-
-

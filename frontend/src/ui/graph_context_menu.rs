@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-use crate::ui::graph_store::Graph;
+use daemon::Graph;
 
 #[derive(Props, Clone, PartialEq)]
 pub struct GraphNodeContextMenuProps {
@@ -98,7 +98,7 @@ pub fn GraphNodeContextMenu(props: GraphNodeContextMenuProps) -> Element {
 							if let Some(ref id) = sync_node_id {
 								let id_clone = id.clone();
 								graph.with_mut(|g| {
-									g.drag_state = crate::ui::graph_store::DragState::CreatingEdge {
+									g.drag_state = daemon::DragState::CreatingEdge {
 										source_id: id_clone.clone(),
 										source_x: g.find_node(&id_clone).map(|n| n.center_x()).unwrap_or(0.0),
 										source_y: g.find_node(&id_clone).map(|n| n.center_y()).unwrap_or(0.0),

@@ -1,6 +1,20 @@
 [package]
 name = "daemon"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
+kip-core = { path = "../kip-core" }
+surrealdb = { workspace = true }
+surrealdb-types = { workspace = true }
+tokio = { workspace = true }
+walkdir = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+blake3 = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

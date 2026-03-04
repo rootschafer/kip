@@ -2,18 +2,17 @@ use dioxus::prelude::*;
 use tracing::{error, info};
 
 use crate::{
-	db::DbHandle,
 	ui::{
 		container_components::*,
 		file_picker::*,
 		graph_context_menu::*,
 		graph_edges::*,
 		graph_nodes::*,
-		graph_store::{load_graph_data, Graph},
-		graph_types::*,
 		notification::NotificationService,
 	},
 };
+use daemon::{DbHandle, Graph, load_graph_data};
+use kip_core::{ContainerView, Vec2};
 
 // ─── Helper: Get workspace-relative mouse coordinates ─────────────────
 
@@ -295,7 +294,7 @@ pub fn MappingGraph(
 						warn!("cannot add to disconnected target");
 						return;
 					}
-					let cid = crate::ui::graph_store::rid_string(&c.id);
+					let cid = daemon::rid_string(&c.id);
 					let name = c.name.clone();
 					let root = c.mount_point.clone().unwrap_or_else(|| "/".to_string());
 					picker.open(cid, name, std::path::PathBuf::from(root));
@@ -315,7 +314,7 @@ pub fn MappingGraph(
 						let (vp_x, vp_y) = graph.with(|g| (g.viewport_x, g.viewport_y));
 						graph
 							.with_mut(|g| {
-								g.drag_state = crate::ui::graph_store::DragState::Panning {
+								g.drag_state = daemon::DragState::Panning {
 									start_x: x,
 									start_y: y,
 									start_viewport_x: vp_x,
@@ -325,7 +324,7 @@ pub fn MappingGraph(
 					} else if e.data().modifiers().shift() {
 						graph
 							.with_mut(|g| {
-								g.drag_state = crate::ui::graph_store::DragState::Lasso {
+								g.drag_state = daemon::DragState::Lasso {
 									start_x: x,
 									start_y: y,
 									current_x: x,
@@ -344,7 +343,7 @@ pub fn MappingGraph(
 					let drag_state_snapshot = graph().drag_state.clone();
 
 					// Handle panning - 1:1 with mouse movement
-					if let crate::ui::graph_store::DragState::Panning {
+					if let daemon::DragState::Panning {
 						start_x,
 						start_y,
 						start_viewport_x,
@@ -362,7 +361,7 @@ pub fn MappingGraph(
 						return;
 					}
 					match &drag_state_snapshot {
-						crate::ui::graph_store::DragState::CreatingEdge {
+						daemon::DragState::CreatingEdge {
 							source_id,
 							source_x,
 							source_y,
@@ -370,7 +369,7 @@ pub fn MappingGraph(
 						} => {
 							graph
 								.with_mut(|g| {
-									g.drag_state = crate::ui::graph_store::DragState::CreatingEdge {
+									g.drag_state = daemon::DragState::CreatingEdge {
 										source_id: source_id.clone(),
 										source_x: *source_x,
 										source_y: *source_y,
@@ -379,10 +378,10 @@ pub fn MappingGraph(
 									};
 								});
 						}
-						crate::ui::graph_store::DragState::Lasso { start_x, start_y, .. } => {
+						daemon::DragState::Lasso { start_x, start_y, .. } => {
 							graph
 								.with_mut(|g| {
-									g.drag_state = crate::ui::graph_store::DragState::Lasso {
+									g.drag_state = daemon::DragState::Lasso {
 										start_x: *start_x,
 										start_y: *start_y,
 										current_x: x,
@@ -390,7 +389,7 @@ pub fn MappingGraph(
 									};
 								});
 						}
-						crate::ui::graph_store::DragState::ClickPending {
+						daemon::DragState::ClickPending {
 							node_id,
 							start_x,
 							start_y,
@@ -402,7 +401,7 @@ pub fn MappingGraph(
 								graph
 									.with_mut(|g| {
 										g.fix_node_position(&node_id);
-										g.drag_state = crate::ui::graph_store::DragState::Dragging {
+										g.drag_state = daemon::DragState::Dragging {
 											node_id: node_id.clone(),
 											offset_x: x - start_x,
 											offset_y: y - start_y,
@@ -411,7 +410,7 @@ pub fn MappingGraph(
 							} else {
 								graph
 									.with_mut(|g| {
-										g.drag_state = crate::ui::graph_store::DragState::ClickPending {
+										g.drag_state = daemon::DragState::ClickPending {
 											node_id: node_id.clone(),
 											start_x: *start_x,
 											start_y: *start_y,
@@ -421,7 +420,7 @@ pub fn MappingGraph(
 									});
 							}
 						}
-						crate::ui::graph_store::DragState::Dragging {
+						daemon::DragState::Dragging {
 							node_id,
 							offset_x,
 							offset_y,
@@ -435,7 +434,7 @@ pub fn MappingGraph(
 										node.fy = Some(new_y);
 										node.position = Vec2::new(new_x, new_y);
 									}
-									g.drag_state = crate::ui::graph_store::DragState::Dragging {
+									g.drag_state = daemon::DragState::Dragging {
 										node_id: node_id.clone(),
 										offset_x: *offset_x,
 										offset_y: *offset_y,
@@ -460,8 +459,8 @@ pub fn MappingGraph(
 
 							// Save the final position to the database
 
-							crate::ui::graph_store::DragState::CreatingEdge { source_id: _, .. } => {}
-							crate::ui::graph_store::DragState::Lasso {
+							daemon::DragState::CreatingEdge { source_id: _, .. } => {}
+							daemon::DragState::Lasso {
 								start_x,
 								start_y,
 								current_x,
@@ -474,10 +473,10 @@ pub fn MappingGraph(
 								graph
 									.with_mut(|g| {
 										g.select_in_rect(min_x, min_y, max_x, max_y);
-										g.drag_state = crate::ui::graph_store::DragState::None;
+										g.drag_state = daemon::DragState::None;
 									});
 							}
-							crate::ui::graph_store::DragState::ClickPending {
+							daemon::DragState::ClickPending {
 								node_id,
 								start_x,
 								start_y,
@@ -520,15 +519,15 @@ pub fn MappingGraph(
 											let mut graph_signal = graph;
 											let is_machine_or_drive = matches!(
 												&kind,
-												crate::ui::graph_types::NodeKind::Machine { .. }
-												| crate::ui::graph_types::NodeKind::Drive { .. }
+												kip_core::NodeKind::Machine { .. }
+												| kip_core::NodeKind::Drive { .. }
 											);
 											if is_machine_or_drive && path.is_empty() {
 												let mount_point = graph_signal()
 													.containers
 													.iter()
 													.find(|c| {
-														crate::ui::graph_store::rid_string(&c.id) == node_id
+														daemon::rid_string(&c.id) == node_id
 													})
 													.and_then(|c| c.mount_point.clone());
 												graph_signal
@@ -558,7 +557,7 @@ pub fn MappingGraph(
 														"Scanning filesystem at: {} (parent pos: {:.0}, {:.0})",
 														mount_point, parent_x, parent_y
 													);
-													match crate::ui::graph_store::scan_directory(
+													match daemon::scan_directory(
 															&db_clone,
 															&node_id_clone,
 															&mount_point,
@@ -595,10 +594,10 @@ pub fn MappingGraph(
 								}
 								graph
 									.with_mut(|g| {
-										g.drag_state = crate::ui::graph_store::DragState::None;
+										g.drag_state = daemon::DragState::None;
 									});
 							}
-							crate::ui::graph_store::DragState::Dragging { node_id, .. } => {
+							daemon::DragState::Dragging { node_id, .. } => {
 								graph
 									.with_mut(|g| {
 										g.release_node_position(&node_id);
@@ -610,7 +609,7 @@ pub fn MappingGraph(
 									let x = node.position.x;
 									let y = node.position.y;
 									spawn(async move {
-										if let Err(e) = crate::ui::graph_store::save_node_position(
+										if let Err(e) = daemon::save_node_position(
 												&db_clone,
 												&node_id_clone,
 												x,
@@ -624,13 +623,13 @@ pub fn MappingGraph(
 								}
 								graph
 									.with_mut(|g| {
-										g.drag_state = crate::ui::graph_store::DragState::None;
+										g.drag_state = daemon::DragState::None;
 									});
 							}
 							_ => {
 								graph
 									.with_mut(|g| {
-										g.drag_state = crate::ui::graph_store::DragState::None;
+										g.drag_state = daemon::DragState::None;
 									});
 							}
 						}
@@ -717,7 +716,7 @@ pub fn MappingGraph(
 											let on_changed = on_changed;
 											let mut add_panel = add_panel;
 											spawn(async move {
-												match crate::ui::graph_store::add_remote_machine(
+												match daemon::add_remote_machine(
 														&db,
 														&name,
 														&host,

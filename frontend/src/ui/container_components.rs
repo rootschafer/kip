@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-use crate::ui::graph_types::ContainerView;
+use kip_core::graph_types::ContainerView;
 
 // ─── MachineChip ─────────────────────────────────────────────
 // Toolbar button representing a machine or drive.

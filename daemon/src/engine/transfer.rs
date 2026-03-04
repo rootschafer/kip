@@ -1,43 +1,47 @@
 use std::{
-	fs,
+	fmt, fs,
 	io::{self, Read, Write},
 	path::Path,
 };
 
 use surrealdb::types::RecordId;
-use thiserror::Error;
 
 use crate::db::DbHandle;
 
 const CHUNK_SIZE: usize = 256 * 1024; // 256KB
 const PROGRESS_INTERVAL: usize = 4; // update DB every 4 chunks (~1MB)
 
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum CopyError {
-	#[error("job not found: {0}")]
 	JobNotFound(String),
-
-	#[error("source file not found: {0}")]
 	SourceNotFound(String),
-
-	#[error("permission denied: {0}")]
 	PermissionDenied(String),
-
-	#[error("disk full: {0}")]
 	DiskFull(String),
-
-	#[error("I/O error: {0}")]
 	IoError(String),
-
-	#[error("hash mismatch: source={source_hash}, dest={dest_hash}")]
 	HashMismatch {
 		source_hash: String,
 		dest_hash: String,
 	},
-
-	#[error("database error: {0}")]
 	DbError(String),
 }
+
+impl fmt::Display for CopyError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			CopyError::JobNotFound(s) => write!(f, "job not found: {}", s),
+			CopyError::SourceNotFound(s) => write!(f, "source file not found: {}", s),
+			CopyError::PermissionDenied(s) => write!(f, "permission denied: {}", s),
+			CopyError::DiskFull(s) => write!(f, "disk full: {}", s),
+			CopyError::IoError(s) => write!(f, "I/O error: {}", s),
+			CopyError::HashMismatch { source_hash, dest_hash } => {
+				write!(f, "hash mismatch: source={}, dest={}", source_hash, dest_hash)
+			}
+			CopyError::DbError(s) => write!(f, "database error: {}", s),
+		}
+	}
+}
+
+impl std::error::Error for CopyError {}
 
 impl CopyError {
 	/// Whether this error is retryable (transient I/O) vs needs immediate review.

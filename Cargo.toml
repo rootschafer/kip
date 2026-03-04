@@ -43,9 +43,10 @@
 resolver = "3"
 members = [
     "cli",
-    "core",
-    "crates/actix-dioxus-serve", "daemon",
+    "daemon",
     "frontend",
+    "kip-core",
+    "crates/actix-dioxus-serve",
 ]
 
 [workspace.dependencies]
@@ -55,82 +56,23 @@ thiserror = "2"
 toml = "0.8"
 tracing = "0.1"
 tracing-subscriber = "0.3.22"
+tempfile = "3.26.0"
+actix-dioxus-serve = { path = "./crates/actix-dioxus-serve" }
+actix-web = "4"
+actix-files = "0.6"
+actix-web-flash-messages = "0.5"
+blake3 = "1"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4.4", features = ["derive"] }
+dioxus = { version = "0.7.3" }
+dirs = "5.0"
+rfd = "0.15"
+serde = { version = "1", features = ["derive"] }
+surrealdb = { version = "3.0.0", features = ["kv-surrealkv"] }
+surrealdb-types = "3.0.0"
+tokio = { version = "1", features = ["full"] }
+tracing-appender = "0.2.4"
+ulid = "1.1"
+walkdir = "2"
 
-[workspace.dependencies.actix-dioxus-serve]
-path = "./crates/actix-dioxus-serve"
-# optional = true
-
-
-[workspace.dependencies.actix-web]
-version = "4"
-# optional = true
-
-[workspace.dependencies.actix-files]
-version = "0.6"
-# optional = true
-
-[workspace.dependencies.actix-web-flash-messages]
-version = "0.5"
-# optional = true
-
-[workspace.dependencies.blake3]
-version = "1"
-# optional = true
-
-[workspace.dependencies.chrono]
-version = "0.4"
-features = ["serde"]
-
-[workspace.dependencies.clap]
-version = "4.4"
-features = ["derive"]
-
-[workspace.dependencies.dioxus]
-version = "0.7.3"
-# features = [
-#     "router",
-#     "signals",
-# ]
-
-[workspace.dependencies.dirs]
-version = "5.0"
-# optional = true
-
-[workspace.dependencies.rfd]
-version = "0.15"
-# optional = true
-
-[workspace.dependencies.serde]
-version = "1"
-features = ["derive"]
-
-[workspace.dependencies.surrealdb]
-version = "3.0.0"
-features = ["kv-surrealkv"]
-# optional = true
-
-[workspace.dependencies.surrealdb-types]
-version = "3.0.0"
-# optional = true
-
-[workspace.dependencies.tokio]
-version = "1"
-features = ["full"]
-# optional = true
-
-[workspace.dependencies.tracing-appender]
-version = "0.2.4"
-# optional = true
-
-[workspace.dependencies.ulid]
-version = "1.1"
-# optional = true
-
-[workspace.dependencies.walkdir]
-version = "2"
-# optional = true
-
-# [workspace.dependencies.wasm-bindgen-futures]
-# version = "0.4"
-# optional = true
 

@@ -3,7 +3,8 @@ use std::collections::HashSet;
 use surrealdb::types::{RecordId, RecordIdKey, SurrealValue};
 use tracing::{info, warn};
 
-use crate::{db::DbHandle, ui::graph_types::*};
+use crate::db::DbHandle;
+use kip_core::*;
 
 // ─── Force simulation constants ───────────────────────────────
 
@@ -39,7 +40,7 @@ fn get_collision_radius(node: &GraphNode) -> f64 {
 	match &node.kind {
 		NodeKind::Machine { .. } | NodeKind::Drive { .. } => 40.0, // Reduced from 45
 		NodeKind::Directory { .. } | NodeKind::Group { .. } => 28.0, // Reduced from 30
-		NodeKind::File { .. } => 40.0, // Increased from 15 - files are rectangular (150x36)
+		NodeKind::File { .. } => 40.0,                             // Increased from 15 - files are rectangular (150x36)
 	}
 }
 
@@ -93,12 +94,7 @@ pub struct ContextMenuState {
 
 impl ContextMenuState {
 	pub fn new() -> Self {
-		Self {
-			visible: false,
-			x: 0.0,
-			y: 0.0,
-			node_id: None,
-		}
+		Self { visible: false, x: 0.0, y: 0.0, node_id: None }
 	}
 
 	pub fn show(&mut self, x: f64, y: f64, node_id: String) {
@@ -637,9 +633,9 @@ fn apply_forces(nodes: &mut [GraphNode], edges: &[GraphEdge], alpha: f64) {
 		// Files orbit further out than folders to reduce visual clutter
 		let parent_id = nodes[parent_idx].id.clone();
 		let sibling_count = child_counts.get(&parent_id).copied().unwrap_or(1);
-		
+
 		// Different base distances by node type
-		let is_file = matches!(nodes[child_idx].kind, crate::ui::graph_types::NodeKind::File { .. });
+		let is_file = matches!(nodes[child_idx].kind, kip_core::NodeKind::File { .. });
 		let base_distance = if is_file { 100.0 } else { 70.0 }; // Files further out
 		let distance_per_child = 8.0; // More subtle scaling
 		let target_dist = base_distance + (sibling_count as f64 * distance_per_child).min(100.0);
@@ -647,7 +643,7 @@ fn apply_forces(nodes: &mut [GraphNode], edges: &[GraphEdge], alpha: f64) {
 		let delta = nodes[parent_idx].center() - nodes[child_idx].center();
 		let dist = delta.length().max(1.0);
 		let displacement = dist - target_dist;
-		
+
 		// Gentle spring to prevent oscillation
 		let spring_k = 0.05;
 		let force = delta.normalized() * spring_k * displacement * alpha;
@@ -665,7 +661,10 @@ fn apply_forces(nodes: &mut [GraphNode], edges: &[GraphEdge], alpha: f64) {
 	let mut siblings_by_parent: std::collections::HashMap<String, Vec<usize>> = std::collections::HashMap::new();
 	for &i in &visible {
 		if let Some(ref pid) = nodes[i].parent_id {
-			siblings_by_parent.entry(pid.clone()).or_insert_with(Vec::new).push(i);
+			siblings_by_parent
+				.entry(pid.clone())
+				.or_insert_with(Vec::new)
+				.push(i);
 		}
 	}
 
@@ -996,7 +995,7 @@ async fn load_nodes(db: &DbHandle, containers: &[ContainerView]) -> Result<Vec<G
 		let kind = if is_dir {
 			NodeKind::Directory { expanded: false }
 		} else {
-			NodeKind::File { file_type: crate::ui::graph_types::FileType::Unknown }
+			NodeKind::File { file_type: kip_core::FileType::Unknown }
 		};
 
 		let (w, h) = node_dimensions(&kind, child_count);
@@ -1254,12 +1253,12 @@ pub async fn scan_directory(
 
 		let is_dir = entry_path.is_dir();
 		let full_path = entry_path.to_string_lossy().to_string();
-		
+
 		// Detect file type for files
 		let file_type = if is_dir {
-			crate::ui::graph_types::FileType::Unknown
+			kip_core::FileType::Unknown
 		} else {
-			crate::ui::graph_types::FileType::from_path(&full_path)
+			kip_core::FileType::from_path(&full_path)
 		};
 
 		// Calculate orbit position
@@ -1282,7 +1281,7 @@ pub async fn scan_directory(
 			velocity: Vec2::default(),
 			pinned: false,
 			visible: true,
-			width: if is_dir { 60.0 } else { 70.0 }, // Reduced width for new layout
+			width: if is_dir { 60.0 } else { 70.0 },  // Reduced width for new layout
 			height: if is_dir { 60.0 } else { 56.0 }, // Increased height for icon+label
 			fx: None,
 			fy: None,

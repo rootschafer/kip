@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use dioxus::prelude::*;
 use tracing::{error, info, warn};
 
-use crate::db::DbHandle;
+use daemon::DbHandle;
 
 // ─── Pane ID generator ──────────────────────────────────────
 

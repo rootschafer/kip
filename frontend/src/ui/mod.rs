@@ -4,7 +4,5 @@ pub mod graph;
 pub mod graph_context_menu;
 pub mod graph_edges;
 pub mod graph_nodes;
-pub mod graph_store;
-pub mod graph_types;
 pub mod notification;
 pub mod review_queue;

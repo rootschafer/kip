@@ -1,9 +1,7 @@
 use dioxus::prelude::*;
 
-use crate::ui::{
-	graph_store::{DragState, Graph},
-	graph_types::*,
-};
+use daemon::{DragState, Graph};
+use kip_core::graph_types::*;
 
 // ─── Helper: Calculate edge attachment point on node bounds ────
 /// Returns the point where an edge should connect to a node's boundary
@@ -140,8 +138,8 @@ pub fn GraphSvgOverlay(
 							kind: skind.clone(),
 							parent_id: None,
 							color: String::new(),
-							position: crate::ui::graph_types::Vec2::new(*sx, *sy),
-							velocity: crate::ui::graph_types::Vec2::default(),
+							position: kip_core::Vec2::new(*sx, *sy),
+							velocity: kip_core::Vec2::default(),
 							pinned: false,
 							visible: true,
 							width: *sw,
@@ -156,8 +154,8 @@ pub fn GraphSvgOverlay(
 							kind: dkind.clone(),
 							parent_id: None,
 							color: String::new(),
-							position: crate::ui::graph_types::Vec2::new(*dx, *dy),
-							velocity: crate::ui::graph_types::Vec2::default(),
+							position: kip_core::Vec2::new(*dx, *dy),
+							velocity: kip_core::Vec2::default(),
 							pinned: false,
 							visible: true,
 							width: *dw,

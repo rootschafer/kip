@@ -1,9 +1,7 @@
 //! Transfer operations API
 
-use crate::{
-	api::{KipError, ScanResult},
-	db::DbHandle,
-};
+use crate::api::{KipError, ScanResult};
+use daemon::DbHandle;
 
 /// Scan an intent's source (re-exported from intent module)
 pub async fn scan_intent(db: &DbHandle, intent_id: &str) -> Result<ScanResult, KipError> {

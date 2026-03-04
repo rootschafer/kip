@@ -4,10 +4,8 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 
-use crate::{
-	api::{ConfigFormat, ConfigImportError, ImportResult, KipError},
-	db::DbHandle,
-};
+use crate::api::{ConfigFormat, ConfigImportError, ImportResult, KipError};
+use daemon::DbHandle;
 
 /// Import backup-tool configuration
 pub async fn import_backup_tool_config(db: &DbHandle, config_dir: Option<PathBuf>) -> Result<ImportResult, KipError> {

@@ -1,21 +1,28 @@
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
 use surrealdb::types::RecordId;
-use thiserror::Error;
 use tokio::sync::Semaphore;
 
 use crate::{db::DbHandle, engine::transfer};
 
 const MAX_CONCURRENCY: usize = 4;
 
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum SchedulerError {
-	#[error("intent not found: {0}")]
 	IntentNotFound(String),
-
-	#[error("database error: {0}")]
 	DbError(String),
 }
+
+impl fmt::Display for SchedulerError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			SchedulerError::IntentNotFound(s) => write!(f, "intent not found: {}", s),
+			SchedulerError::DbError(s) => write!(f, "database error: {}", s),
+		}
+	}
+}
+
+impl std::error::Error for SchedulerError {}
 
 #[derive(Debug, Clone)]
 pub struct RunResult {

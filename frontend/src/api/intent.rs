@@ -2,10 +2,8 @@
 
 use chrono::Utc;
 
-use crate::{
-	api::{KipError, LocationId, RunResult},
-	db::DbHandle,
-};
+use crate::api::{KipError, LocationId, RunResult};
+use daemon::DbHandle;
 
 /// Create a new intent
 pub async fn create_intent(
@@ -172,7 +170,7 @@ pub async fn run_intent(
 	intent_id: &str,
 	_progress: Option<crate::api::ProgressCallback>,
 ) -> Result<RunResult, KipError> {
-	use crate::engine::scheduler;
+	use daemon::engine::scheduler;
 
 	let record_id = surrealdb::types::RecordId::new("intent", intent_id);
 
@@ -220,7 +218,7 @@ pub async fn cancel_intent(db: &DbHandle, intent_id: &str) -> Result<(), KipErro
 
 /// Scan an intent's source
 pub async fn scan_intent(db: &DbHandle, intent_id: &str) -> Result<crate::api::ScanResult, KipError> {
-	use crate::engine::scanner;
+	use daemon::engine::scanner;
 
 	let record_id = surrealdb::types::RecordId::new("intent", intent_id);
 

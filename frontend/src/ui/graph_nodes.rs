@@ -1,9 +1,7 @@
 use dioxus::prelude::*;
 
-use crate::ui::{
-	graph_store::{DragState, Graph},
-	graph_types::*,
-};
+use daemon::{DragState, Graph};
+use kip_core::graph_types::*;
 
 // ─── GraphNodeComponent ────────────────────────────────────────
 

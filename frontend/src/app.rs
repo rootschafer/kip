@@ -1,7 +1,6 @@
 use dioxus::prelude::*;
 
 use crate::{
-	db::DbHandle,
 	ui::{
 		file_picker::{FilePickerLayer, PickerManager},
 		graph::MappingGraph,
@@ -9,6 +8,7 @@ use crate::{
 		review_queue::ReviewQueue,
 	},
 };
+use daemon::DbHandle;
 
 const MAIN_CSS: Asset = asset!("/assets/main.css");
 

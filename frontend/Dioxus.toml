@@ -1,4 +1,6 @@
 [application]
+name = "kip"
+default_platform = "desktop"
 
 [web.app]
 

@@ -1,8 +1,8 @@
 use dioxus::prelude::*;
-use surrealdb::types::{RecordId, SurrealValue};
+use surrealdb_types::{RecordId, SurrealValue};
 use tracing::error;
 
-use crate::db::DbHandle;
+use daemon::DbHandle;
 
 #[derive(Debug, Clone, SurrealValue)]
 struct ReviewRow {

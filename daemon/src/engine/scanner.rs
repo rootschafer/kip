@@ -1,33 +1,48 @@
-use std::{path::Path, time::SystemTime};
+use std::{fmt, path::Path, time::SystemTime};
 
 use surrealdb::types::RecordId;
-use thiserror::Error;
 use walkdir::WalkDir;
 
 use crate::db::DbHandle;
 
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum ScanError {
-	#[error("intent not found: {0}")]
 	IntentNotFound(String),
-
-	#[error("source location not found: {0}")]
 	SourceLocationNotFound(String),
-
-	#[error("destination location not found: {0}")]
 	DestLocationNotFound(String),
-
-	#[error("source path does not exist: {0}")]
 	SourcePathNotExists(String),
-
-	#[error("source path is not a directory: {0}")]
 	SourcePathNotDir(String),
-
-	#[error("filesystem walk error: {0}")]
-	WalkError(#[from] walkdir::Error),
-
-	#[error("database error: {0}")]
+	WalkError(walkdir::Error),
 	DbError(String),
+}
+
+impl fmt::Display for ScanError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			ScanError::IntentNotFound(s) => write!(f, "intent not found: {}", s),
+			ScanError::SourceLocationNotFound(s) => write!(f, "source location not found: {}", s),
+			ScanError::DestLocationNotFound(s) => write!(f, "destination location not found: {}", s),
+			ScanError::SourcePathNotExists(s) => write!(f, "source path does not exist: {}", s),
+			ScanError::SourcePathNotDir(s) => write!(f, "source path is not a directory: {}", s),
+			ScanError::WalkError(e) => write!(f, "filesystem walk error: {}", e),
+			ScanError::DbError(s) => write!(f, "database error: {}", s),
+		}
+	}
+}
+
+impl std::error::Error for ScanError {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match self {
+			ScanError::WalkError(e) => Some(e),
+			_ => None,
+		}
+	}
+}
+
+impl From<walkdir::Error> for ScanError {
+	fn from(err: walkdir::Error) -> Self {
+		ScanError::WalkError(err)
+	}
 }
 
 #[derive(Debug, Clone)]

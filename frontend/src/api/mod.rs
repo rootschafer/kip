@@ -20,4 +20,4 @@ pub use query::*;
 pub use config::*;
 
 // Re-export common types
-pub use crate::db::DbHandle;
+pub use daemon::DbHandle;
