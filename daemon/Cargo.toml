@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 kip-core = { path = "../kip-core" }
-surrealdb = { workspace = true }
+surrealdb = { workspace = true, features = ["kv-mem"] }
 surrealdb-types = { workspace = true }
 tokio = { workspace = true }
 walkdir = { workspace = true }

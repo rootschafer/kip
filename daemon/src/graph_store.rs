@@ -1235,8 +1235,15 @@ pub async fn scan_directory(
 	}
 
 	// Position nodes in an orbit around the parent
-	let orbit_radius = 300.0; // Increased from 200 for better initial spacing
+	// Scale orbit radius based on number of children to prevent crowding
 	let total = entry_list.len() as f64;
+	let orbit_radius = if total < 5.0 {
+		250.0 // Small orbit for few children
+	} else if total < 15.0 {
+		350.0 // Medium orbit
+	} else {
+		450.0 // Large orbit for many children
+	};
 
 	for (i, entry) in entry_list.into_iter().enumerate() {
 		let entry_path = entry.path();
@@ -1261,8 +1268,10 @@ pub async fn scan_directory(
 			kip_core::FileType::from_path(&full_path)
 		};
 
-		// Calculate orbit position
-		let angle = (i as f64 / total) * 2.0 * PI;
+		// Calculate orbit position with better distribution
+		// Start from top (-90 degrees) and go clockwise
+		let angle_offset = -std::f64::consts::FRAC_PI_2;
+		let angle = angle_offset + (i as f64 / total) * 2.0 * std::f64::consts::PI;
 		let x = parent_x + orbit_radius * angle.cos();
 		let y = parent_y + orbit_radius * angle.sin();
 

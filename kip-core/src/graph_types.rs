@@ -210,9 +210,20 @@ pub fn palette_color(index: usize) -> &'static str {
 	PALETTE[index % PALETTE.len()]
 }
 
+/// Create a path between two points
+/// For hierarchy edges: straight line
+/// For sync edges: gentle curve
 pub fn bezier_path(x1: f64, y1: f64, x2: f64, y2: f64) -> String {
-	let dx = (x2 - x1).abs() * 0.5;
-	format!("M {x1} {y1} C {} {y1}, {} {y2}, {x2} {y2}", x1 + dx, x2 - dx)
+	// Use straight line for cleaner look
+	format!("M {x1} {y1} L {x2} {y2}")
+}
+
+/// Create a curved path for sync edges (optional, more visually distinct)
+pub fn bezier_path_curved(x1: f64, y1: f64, x2: f64, y2: f64) -> String {
+	let dx = (x2 - x1) * 0.5;
+	let dy = (y2 - y1) * 0.5;
+	// Gentler curve that follows the natural arc
+	format!("M {x1} {y1} C {} {}, {} {}, {x2} {y2}", x1 + dx, y1, x2 - dx, y2)
 }
 
 pub fn edge_color(status: &str) -> &'static str {

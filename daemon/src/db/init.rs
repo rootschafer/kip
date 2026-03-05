@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use surrealdb::{
-	engine::local::{Db, SurrealKv},
+	engine::local::{Db, Mem, SurrealKv},
 	Surreal,
 };
 
@@ -27,17 +27,10 @@ pub async fn init_with_path(path: &Path) -> Result<DbHandle, Box<dyn std::error:
 }
 
 /// Initialize an in-memory database for testing
-/// Each call creates a completely isolated instance
+/// Each call creates a completely isolated instance with no filesystem access
 pub async fn init_memory() -> Result<DbHandle, Box<dyn std::error::Error>> {
-	// Use a unique memory namespace for each test
-	use std::time::{SystemTime, UNIX_EPOCH};
-	let timestamp = SystemTime::now()
-		.duration_since(UNIX_EPOCH)
-		.unwrap()
-		.as_nanos();
-	let memory_id = format!("mem://test_{}", timestamp);
-
-	let db = Surreal::new::<SurrealKv>(memory_id.as_str()).await?;
+	// Use true in-memory storage (no filesystem access)
+	let db = Surreal::new::<Mem>(()).await?;
 	db.use_ns("kip").use_db("kip").await?;
 
 	run_migrations(&db).await?;

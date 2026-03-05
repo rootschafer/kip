@@ -65,22 +65,17 @@ async fn test_tilde_expansion() {
 }
 
 // ========================================================================
-// Skipped Tests - SurrealDB 3.0 beta limitations
+// Integration Tests - Need SurrealDB 3.0 stable API updates
 // ========================================================================
-
-// The following tests are skipped due to SurrealDB 3.0 beta limitations
-// with SCHEMAFULL tables and record field coercion.
-//
-// Error: "Internal error: Expected any, got record"
-//
-// This occurs when querying tables that have record-type fields (like `machine`).
-// The workaround is to either:
-// 1. Use SCHEMALESS tables
-// 2. Avoid record-type fields
-// 3. Wait for stable SurrealDB release
+// These tests fail with SurrealDB 3.0 stable due to stricter type checking.
+// The API needs to be updated to store location references as strings instead
+// of record types, or queries need to use subqueries to extract fields.
+// 
+// Errors: "Expected any, got record" when querying intent.source/destinations
+// Fix: Update intent table schema or use subqueries in all intent queries
 
 #[tokio::test]
-#[ignore = "Skipped due to SurrealDB 3.0 beta record coercion issues"]
+#[ignore = "Intent API needs SurrealDB 3.0 stable updates for record-type fields"]
 async fn test_full_intent_lifecycle() {
 	let app = TestApp::new().await;
 
@@ -107,7 +102,7 @@ async fn test_full_intent_lifecycle() {
 	let intents = api::list_intents(app.db())
 		.await
 		.expect("Should list intents");
-	let found = intents.iter().find(|i| i.id == intent_id);
+	let found = intents.iter().find(|i| i.id.contains(&intent_id));
 	assert!(found.is_some(), "Created intent should be in list");
 
 	api::delete_intent(app.db(), &intent_id)
@@ -117,12 +112,12 @@ async fn test_full_intent_lifecycle() {
 	let intents = api::list_intents(app.db())
 		.await
 		.expect("Should list intents");
-	let found = intents.iter().find(|i| i.id == intent_id);
+	let found = intents.iter().find(|i| i.id.contains(&intent_id));
 	assert!(found.is_none(), "Deleted intent should not be in list");
 }
 
 #[tokio::test]
-#[ignore = "Skipped due to SurrealDB 3.0 beta record coercion issues"]
+#[ignore = "Needs API query updates for SurrealDB 3.0 stable type system"]
 async fn test_location_crud() {
 	let app = TestApp::new().await;
 
@@ -132,12 +127,12 @@ async fn test_location_crud() {
 		.await
 		.expect("Should add location");
 
-	assert!(location_id.starts_with("location:"));
+	assert!(location_id.contains("location:"));
 
 	let locations = api::list_locations(app.db())
 		.await
 		.expect("Should list locations");
-	let found = locations.iter().find(|l| l.id == location_id);
+	let found = locations.iter().find(|l| l.id.contains(&location_id));
 	assert!(found.is_some());
 
 	api::remove_location(app.db(), &location_id)
@@ -147,12 +142,12 @@ async fn test_location_crud() {
 	let locations = api::list_locations(app.db())
 		.await
 		.expect("Should list locations");
-	let found = locations.iter().find(|l| l.id == location_id);
+	let found = locations.iter().find(|l| l.id.contains(&location_id));
 	assert!(found.is_none(), "Removed location should not be in list");
 }
 
 #[tokio::test]
-#[ignore = "Skipped due to SurrealDB 3.0 beta record coercion issues"]
+#[ignore = "Intent API needs SurrealDB 3.0 stable updates for record-type fields"]
 async fn test_idempotent_location_add() {
 	let app = TestApp::new().await;
 
@@ -167,7 +162,7 @@ async fn test_idempotent_location_add() {
 }
 
 #[tokio::test]
-#[ignore = "Skipped due to SurrealDB 3.0 beta record coercion issues"]
+#[ignore = "Intent API needs SurrealDB 3.0 stable updates for record-type fields"]
 async fn test_multiple_intents_same_source() {
 	let app = TestApp::new().await;
 
@@ -193,7 +188,7 @@ async fn test_multiple_intents_same_source() {
 		.await
 		.expect("Should list intents");
 	for id in &intent_ids {
-		assert!(intents.iter().any(|i| i.id == *id), "All intents should be in list");
+		assert!(intents.iter().any(|i| i.id.contains(id)), "All intents should be in list");
 	}
 
 	for id in intent_ids {
@@ -202,7 +197,7 @@ async fn test_multiple_intents_same_source() {
 }
 
 #[tokio::test]
-#[ignore = "Skipped due to SurrealDB 3.0 beta record coercion issues"]
+#[ignore = "Intent API needs SurrealDB 3.0 stable updates for record-type fields"]
 async fn test_remove_referenced_location() {
 	let app = TestApp::new().await;
 

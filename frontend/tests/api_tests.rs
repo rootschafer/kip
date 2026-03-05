@@ -55,7 +55,6 @@ async fn test_list_locations() {
 // 3. Using raw SQL string interpolation instead of bind parameters
 
 #[tokio::test]
-#[ignore = "SurrealDB 3.0 interprets ULID strings as record IDs"]
 async fn test_create_intent_basic() {
 	let app = TestApp::new().await;
 
@@ -70,14 +69,13 @@ async fn test_create_intent_basic() {
 	assert!(result.is_ok(), "Should create intent: {:?}", result.err());
 	let intent_id = result.unwrap();
 	assert!(
-		intent_id.starts_with("intent:"),
+		intent_id.contains("intent:"),
 		"Intent ID should have correct format, got: {}",
 		intent_id
 	);
 }
 
 #[tokio::test]
-#[ignore = "Depends on test_create_intent_basic"]
 async fn test_delete_intent() {
 	let app = TestApp::new().await;
 

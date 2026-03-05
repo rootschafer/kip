@@ -232,6 +232,13 @@ body {
 .workspace-svg path,
 .workspace-svg line {
     pointer-events: stroke;
+    transition: opacity 0.2s ease, stroke-width 0.2s ease;
+}
+.workspace-svg path:hover {
+    opacity: 0.9 !important;
+    stroke-width: 4 !important;
+    cursor: pointer;
+    pointer-events: all;
 }
 
 /* ─── Containers (glass cards) ─── */
@@ -445,14 +452,17 @@ body {
     cursor: grab;
     user-select: none;
     --node-color: #ffffff; /* Default fallback color */
-    transition: none; /* Force-directed layout handles animation via physics, not CSS */
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
 }
 .graph-node:hover {
-    transform: scale(1.05);
-    z-index: 5;
+    transform: scale(1.08) translateY(-2px);
+    z-index: 10;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4));
 }
 .graph-node:active {
     cursor: grabbing;
+    transform: scale(1.02);
 }
 
 /* ─── File nodes (pills) ─── */
@@ -668,8 +678,28 @@ body {
 /* ─── Selected nodes ─── */
 .graph-node.selected {
     border-color: var(--accent) !important;
-    background: rgba(74, 158, 255, 0.1) !important;
-    box-shadow: 0 0 12px var(--accent-glow) !important;
+    border-width: 2px !important;
+    background: rgba(74, 158, 255, 0.15) !important;
+    box-shadow: 
+        0 0 0 2px rgba(74, 158, 255, 0.3),
+        0 0 20px rgba(74, 158, 255, 0.4),
+        0 0 40px rgba(74, 158, 255, 0.2) !important;
+    animation: selected-pulse 2s ease-in-out infinite;
+}
+
+@keyframes selected-pulse {
+    0%, 100% {
+        box-shadow: 
+            0 0 0 2px rgba(74, 158, 255, 0.3),
+            0 0 20px rgba(74, 158, 255, 0.4),
+            0 0 40px rgba(74, 158, 255, 0.2);
+    }
+    50% {
+        box-shadow: 
+            0 0 0 2px rgba(74, 158, 255, 0.5),
+            0 0 25px rgba(74, 158, 255, 0.5),
+            0 0 50px rgba(74, 158, 255, 0.3);
+    }
 }
 
 /* ─── Node labels ─── */
@@ -1861,4 +1891,81 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
     height: 1px;
     background: rgba(255, 255, 255, 0.08);
     margin: 4px 0;
+}
+
+/* ─── Node Status Indicators ─── */
+.graph-node.syncing {
+    position: relative;
+}
+
+.graph-node.syncing::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: inherit;
+    border: 2px solid transparent;
+    border-top-color: var(--accent);
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.graph-node.error {
+    opacity: 0.8;
+}
+
+.graph-node.error::after {
+    content: '⚠️';
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    font-size: 14px;
+    background: var(--red);
+    border-radius: 50%;
+    padding: 2px 4px;
+    border: 2px solid var(--bg);
+}
+
+.graph-node.offline {
+    opacity: 0.5;
+    filter: grayscale(0.6);
+}
+
+/* ─── Zoom Controls ─── */
+.zoom-controls {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    margin-left: auto;
+}
+
+.btn-zoom {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    color: var(--text);
+    font-size: 18px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.btn-zoom:hover {
+    background: var(--glass-hover);
+    border-color: var(--accent);
+    color: var(--accent);
+    transform: translateY(-1px);
+}
+
+.btn-zoom:active {
+    transform: translateY(0);
 }

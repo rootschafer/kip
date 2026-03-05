@@ -3,63 +3,6 @@ use dioxus::prelude::*;
 use daemon::{DragState, Graph};
 use kip_core::graph_types::*;
 
-// ─── Helper: Calculate edge attachment point on node bounds ────
-/// Returns the point where an edge should connect to a node's boundary
-/// instead of its center, preventing ugly loops
-fn get_edge_attachment_point(
-	node: &GraphNode,
-	toward_x: f64,
-	toward_y: f64,
-) -> (f64, f64) {
-	let center_x = node.center_x();
-	let center_y = node.center_y();
-	let half_w = node.width / 2.0;
-	let half_h = node.height / 2.0;
-	
-	// Calculate angle from node center to target
-	let dx = toward_x - center_x;
-	let dy = toward_y - center_y;
-	
-	// For circular nodes (directories, machines, drives), use radius
-	if matches!(node.kind, NodeKind::Directory { .. } | NodeKind::Group { .. } | NodeKind::Machine { .. } | NodeKind::Drive { .. }) {
-		let radius = half_w; // Circular nodes have equal width/height
-		if dx.abs() < 0.1 && dy.abs() < 0.1 {
-			return (center_x, center_y);
-		}
-		let angle = dy.atan2(dx);
-		let attach_x = center_x + radius * angle.cos();
-		let attach_y = center_y + radius * angle.sin();
-		return (attach_x, attach_y);
-	}
-	
-	// For rectangular file nodes, calculate intersection with rectangle boundary
-	if dx.abs() < 0.1 && dy.abs() < 0.1 {
-		return (center_x, center_y);
-	}
-	
-	// Calculate which side of the rectangle the edge should connect to
-	let slope = dy / dx;
-	let half_slope = half_h / half_w;
-	
-	let (attach_x, attach_y) = if slope.abs() <= half_slope {
-		// Connect to left or right side
-		if dx > 0.0 {
-			(center_x + half_w, center_y + half_w * slope)
-		} else {
-			(center_x - half_w, center_y - half_w * slope)
-		}
-	} else {
-		// Connect to top or bottom
-		if dy > 0.0 {
-			(center_x + half_h / slope, center_y + half_h)
-		} else {
-			(center_x - half_h / slope, center_y - half_h)
-		}
-	};
-	
-	(attach_x, attach_y)
-}
-
 // ─── GraphSvgOverlay ───────────────────────────────────────────
 // SVG overlay for rendering edges, cluster backgrounds, rubber band, and lasso
 
@@ -74,18 +17,6 @@ pub fn GraphSvgOverlay(
 ) -> Element {
 	let graph_snapshot = graph();
 	let visible_edges = graph_snapshot.visible_edges();
-	
-	// Store full node data for edge attachment calculation
-	let node_data: std::collections::HashMap<String, (f64, f64, f64, f64, NodeKind)> = graph_snapshot
-		.visible_nodes()
-		.iter()
-		.map(|node| {
-			(
-				node.id.clone(),
-				(node.center_x(), node.center_y(), node.width, node.height, node.kind.clone()),
-			)
-		})
-		.collect();
 
 	// Pre-compute lasso rect
 	let (lasso_active, lasso_x, lasso_y, lasso_w, lasso_h) = {
@@ -122,53 +53,18 @@ pub fn GraphSvgOverlay(
 			height: "{canvas_height}",
 			style: "width: {canvas_width}px; height: {canvas_height}px;",
 
-			// Cluster backgrounds removed
-
-			// Render all visible edges with proper attachment points
+			// Render all visible edges - connect node centers with straight lines
 			for edge in visible_edges.iter() {
 				{
-					let source = node_data.get(&edge.source_id);
-					let dest = node_data.get(&edge.dest_id);
-					if let (Some((sx, sy, sw, sh, skind)), Some((dx, dy, dw, dh, dkind))) = (source, dest) {
-						// Create temporary node structs for attachment calculation
-						let source_node = GraphNode {
-							id: edge.source_id.clone(),
-							label: String::new(),
-							path: String::new(),
-							kind: skind.clone(),
-							parent_id: None,
-							color: String::new(),
-							position: kip_core::Vec2::new(*sx, *sy),
-							velocity: kip_core::Vec2::default(),
-							pinned: false,
-							visible: true,
-							width: *sw,
-							height: *sh,
-							fx: None,
-							fy: None,
-						};
-						let dest_node = GraphNode {
-							id: edge.dest_id.clone(),
-							label: String::new(),
-							path: String::new(),
-							kind: dkind.clone(),
-							parent_id: None,
-							color: String::new(),
-							position: kip_core::Vec2::new(*dx, *dy),
-							velocity: kip_core::Vec2::default(),
-							pinned: false,
-							visible: true,
-							width: *dw,
-							height: *dh,
-							fx: None,
-							fy: None,
-						};
-						
-						// Calculate attachment points on node boundaries
-						let (start_x, start_y) = get_edge_attachment_point(&source_node, *dx, *dy);
-						let (end_x, end_y) = get_edge_attachment_point(&dest_node, *sx, *sy);
-						
-						let path_d = bezier_path(start_x, start_y, end_x, end_y);
+					let source_node = graph_snapshot.find_node(&edge.source_id);
+					let dest_node = graph_snapshot.find_node(&edge.dest_id);
+					if let (Some(source), Some(dest)) = (source_node, dest_node) {
+						let sx = source.center_x();
+						let sy = source.center_y();
+						let dx = dest.center_x();
+						let dy = dest.center_y();
+
+						let path_d = bezier_path(sx, sy, dx, dy);
 						let color = edge_color(&edge.status);
 						let width = if edge.status == "transferring" || edge.status == "scanning" {
 							"3"
@@ -184,7 +80,7 @@ pub fn GraphSvgOverlay(
 						stroke_width: "{width}",
 						fill: "none",
 						stroke_linecap: "round",
-						opacity: "0.7",
+						opacity: "0.5",
 					}
 				}
 					} else {

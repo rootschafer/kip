@@ -276,6 +276,25 @@ pub fn MappingGraph(
 		});
 	});
 
+	// Keyboard shortcuts
+	use_effect(move || {
+		let graph_signal = graph;
+		spawn(async move {
+			// Note: Dioxus 0.7 doesn't have global keyboard listeners yet
+			// This is a placeholder for future keyboard shortcut implementation
+			// Common shortcuts to implement:
+			// - Delete/Backspace: Delete selected nodes
+			// - Ctrl+A: Select all
+			// - Escape: Deselect all, close menus
+			// - Space: Pan mode
+			// - +/-: Zoom in/out
+			// - E: Expand selected directory
+			// - C: Collapse selected directory
+			// - S: Start sync (edge creation mode)
+			tracing::info!("Keyboard shortcuts ready (implementation pending)");
+		});
+	});
+
 	rsx! {
 		div { class: "graph-area",
 			// Toolbar with status and machine chips
