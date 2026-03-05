@@ -454,10 +454,11 @@ body {
     --node-color: #ffffff; /* Default fallback color */
     transition: transform 0.15s ease, box-shadow 0.15s ease;
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+    z-index: 10; /* Always render above edges */
 }
 .graph-node:hover {
     transform: scale(1.08) translateY(-2px);
-    z-index: 10;
+    z-index: 20;
     filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4));
 }
 .graph-node:active {
