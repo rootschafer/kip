@@ -1,14 +1,12 @@
 use dioxus::prelude::*;
-
-use crate::{
-	ui::{
-		file_picker::{FilePickerLayer, PickerManager},
-		graph::MappingGraph,
-		notification::{NotificationLayer, NotificationService},
-		review_queue::ReviewQueue,
-	},
-};
 use daemon::DbHandle;
+
+use crate::ui::{
+	file_picker::{FilePickerLayer, PickerManager},
+	graph::MappingGraph,
+	notification::{NotificationLayer, NotificationService},
+	review_queue::ReviewQueue,
+};
 
 const MAIN_CSS: Asset = asset!("/assets/main.css");
 

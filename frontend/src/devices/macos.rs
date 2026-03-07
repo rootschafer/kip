@@ -2,7 +2,6 @@ use std::path::Path;
 
 use serde::Deserialize;
 use tokio::task::JoinHandle;
-
 use daemon::DbHandle;
 
 const POLL_INTERVAL_SECS: u64 = 5;

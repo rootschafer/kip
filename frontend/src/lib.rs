@@ -1,9 +1,9 @@
 //! Kip - File synchronization UI
 
-pub mod ui;
-pub mod app;
-pub mod util;
 pub mod api;
+pub mod app;
+pub mod ui;
+pub mod util;
 
 #[cfg(feature = "desktop")]
 pub mod devices;

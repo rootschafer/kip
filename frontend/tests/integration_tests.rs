@@ -70,7 +70,7 @@ async fn test_tilde_expansion() {
 // These tests fail with SurrealDB 3.0 stable due to stricter type checking.
 // The API needs to be updated to store location references as strings instead
 // of record types, or queries need to use subqueries to extract fields.
-// 
+//
 // Errors: "Expected any, got record" when querying intent.source/destinations
 // Fix: Update intent table schema or use subqueries in all intent queries
 

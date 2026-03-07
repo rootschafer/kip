@@ -26,9 +26,7 @@ pub struct DbHandle {
 /// ~/Library/Application Support/Kip/kip.db
 fn db_path() -> PathBuf {
 	let base = dirs::data_dir()
-		.or_else(|| {
-			dirs::home_dir().map(|h| h.join("Library").join("Application Support"))
-		})
+		.or_else(|| dirs::home_dir().map(|h| h.join("Library").join("Application Support")))
 		.unwrap_or_else(|| PathBuf::from("."));
 	let kip_dir = base.join("Kip");
 	std::fs::create_dir_all(&kip_dir).ok();
@@ -65,8 +63,10 @@ pub async fn add_location(
 	machine: Option<&str>,
 ) -> Result<String> {
 	let path_str = path.to_string_lossy().to_string();
-	let label_str = label.unwrap_or_else(|| path.file_name().and_then(|s| s.to_str()).unwrap_or("")).to_string();
-	
+	let label_str = label
+		.unwrap_or_else(|| path.file_name().and_then(|s| s.to_str()).unwrap_or(""))
+		.to_string();
+
 	// Check if location already exists
 	let mut response = db
 		.db
@@ -74,7 +74,7 @@ pub async fn add_location(
 		.bind(("path", path_str.clone()))
 		.await?
 		.check()?;
-	
+
 	let existing: Option<Vec<serde_json::Value>> = response.take(0)?;
 	if let Some(rows) = existing {
 		if let Some(row) = rows.first() {
@@ -83,39 +83,35 @@ pub async fn add_location(
 			}
 		}
 	}
-	
+
 	// Create new location
 	let location_id = format!("location:{}", slug(&path_str));
 	let machine_ref = match machine {
 		Some(m) => format!("machine:{}", slug(m)),
 		None => "machine:local".to_string(),
 	};
-	
-	db.db.query(&format!(
-		"CREATE {} CONTENT {{
+
+	db.db
+		.query(&format!(
+			"CREATE {} CONTENT {{
 			machine: {},
 			path: $path,
 			label: $label,
 			created_at: time::now(),
 			available: true,
 		}}",
-		location_id, machine_ref
-	))
-	.bind(("path", path_str))
-	.bind(("label", label_str))
-	.await?
-	.check()?;
-	
+			location_id, machine_ref
+		))
+		.bind(("path", path_str))
+		.bind(("label", label_str))
+		.await?
+		.check()?;
+
 	Ok(location_id)
 }
 
 /// Create an intent (sync relationship) between source and destinations
-pub async fn create_intent(
-	db: &DbHandle,
-	source_id: &str,
-	dest_ids: &[String],
-	priority: u16,
-) -> Result<String> {
+pub async fn create_intent(db: &DbHandle, source_id: &str, dest_ids: &[String], priority: u16) -> Result<String> {
 	let intent_id = format!("intent:{}", slug(&format!("{}_{}", source_id, dest_ids.join("_"))));
 
 	// Build destinations array using type::thing() for proper record references
@@ -139,8 +135,9 @@ pub async fn create_intent(
 		format!("type::thing('location', '{}')", source_id)
 	};
 
-	db.db.query(&format!(
-		"CREATE {} SET
+	db.db
+		.query(&format!(
+			"CREATE {} SET
 			source = {},
 			destinations = [{}],
 			status = 'idle',
@@ -154,11 +151,11 @@ pub async fn create_intent(
 			completed_files = 0,
 			completed_bytes = 0
 		",
-		intent_id, source_ref, dest_array
-	))
-	.bind(("priority", priority as i64))
-	.await?
-	.check()?;
+			intent_id, source_ref, dest_array
+		))
+		.bind(("priority", priority as i64))
+		.await?
+		.check()?;
 
 	Ok(intent_id)
 }
@@ -189,7 +186,11 @@ pub async fn record_backup_completion(
 
 	// Upsert source location (on local machine)
 	let source_id = format!("location:backup_src_{}", slug(source_path));
-	let source_label = source_path.rsplit('/').next().unwrap_or(source_path).to_string();
+	let source_label = source_path
+		.rsplit('/')
+		.next()
+		.unwrap_or(source_path)
+		.to_string();
 	db.query(&format!(
 		"UPSERT {} CONTENT {{
 			machine: machine:local,
@@ -207,7 +208,11 @@ pub async fn record_backup_completion(
 
 	// Upsert destination location (on the drive)
 	let dest_id = format!("location:backup_dst_{}_{}", slug(drive_name), slug(dest_path));
-	let dest_label = dest_path.rsplit('/').next().unwrap_or(dest_path).to_string();
+	let dest_label = dest_path
+		.rsplit('/')
+		.next()
+		.unwrap_or(dest_path)
+		.to_string();
 	db.query(&format!(
 		"UPSERT {} CONTENT {{
 			path: $path,
@@ -258,10 +263,7 @@ pub async fn record_backup_completion(
 }
 
 /// Import drive configs from TOML into SurrealDB drive records
-pub async fn sync_drives_to_db(
-	db: &Surreal<Db>,
-	drives: &[crate::drive_config::DriveConfig],
-) -> Result<()> {
+pub async fn sync_drives_to_db(db: &Surreal<Db>, drives: &[crate::drive_config::DriveConfig]) -> Result<()> {
 	for drive in drives {
 		let mount = drive.mount_point.as_deref().unwrap_or("").to_string();
 		let connected = if drive.is_local() {

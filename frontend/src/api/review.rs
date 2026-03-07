@@ -1,9 +1,9 @@
 //! Review queue API
 
 use surrealdb_types::RecordId;
+use daemon::DbHandle;
 
 use crate::api::{KipError, Resolution, ReviewId, ReviewItem};
-use daemon::DbHandle;
 
 /// List all review items
 pub async fn list_review_items(db: &DbHandle) -> Result<Vec<ReviewItem>, KipError> {

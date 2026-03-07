@@ -112,12 +112,12 @@ async fn main() -> Result<()> {
 				eprintln!("   Wait for it to complete or kill it to start a new backup");
 				std::process::exit(1);
 			}
-			
+
 			// Set up panic hook to release lock on crash
 			std::panic::set_hook(Box::new(|_| {
 				daemon_lock::release_lock().ok();
 			}));
-			
+
 			// Acquire daemon lock
 			match daemon_lock::try_acquire_lock()? {
 				true => {
@@ -209,11 +209,7 @@ fn list_configs(sort_priority: bool, filter: Option<&str>) -> Result<()> {
 
 	// Sort by priority if requested
 	if sort_priority {
-		all_folders.sort_by(|a, b| {
-			b.1.priority
-				.cmp(&a.1.priority)
-				.then_with(|| a.0.cmp(b.0))
-		});
+		all_folders.sort_by(|a, b| b.1.priority.cmp(&a.1.priority).then_with(|| a.0.cmp(b.0)));
 	}
 
 	println!("\n📁 Configured Folders\n");
@@ -223,10 +219,7 @@ fn list_configs(sort_priority: bool, filter: Option<&str>) -> Result<()> {
 	for (config_name, folder) in &all_folders {
 		let priority = folder.priority.unwrap_or(0);
 		let source_display = folder.source.display();
-		println!(
-			"{:<30} {:<50} {:>8}",
-			config_name, source_display, priority
-		);
+		println!("{:<30} {:<50} {:>8}", config_name, source_display, priority);
 	}
 
 	println!("\nTotal: {} folders configured", all_folders.len());
@@ -249,11 +242,10 @@ fn list_configs(sort_priority: bool, filter: Option<&str>) -> Result<()> {
 
 /// Import backup-tool configuration into database
 async fn import_config(config_dir: Option<String>) -> Result<()> {
-	use cli::db;
-	use cli::folder;
+	use cli::{db, folder};
 
 	let _config_dir = config_dir.map(std::path::PathBuf::from);
-	
+
 	// Initialize database
 	let db = db::init().await?;
 	println!("✅ Connected to database");
@@ -289,19 +281,21 @@ async fn import_config(config_dir: Option<String>) -> Result<()> {
 			match db::add_location(&db, &source_path, None, None).await {
 				Ok(source_id) => {
 					println!("   ✅ Added source: {}", folder_config.source.display());
-					
+
 					// Create intents for each destination
 					for dest in &folder_config.destinations {
 						let dest_path = folder::expand_tilde(&dest.path.clone().into());
-						
+
 						// Try to find or create destination location
 						let dest_id = match db::add_location(&db, &dest_path, None, None).await {
 							Ok(id) => id,
 							Err(_) => continue, // Skip if location already exists
 						};
-						
+
 						// Create intent
-						match db::create_intent(&db, &source_id, &[dest_id], folder_config.priority.unwrap_or(500)).await {
+						match db::create_intent(&db, &source_id, &[dest_id], folder_config.priority.unwrap_or(500))
+							.await
+						{
 							Ok(_) => println!("      ✅ Created sync to {}", dest.path),
 							Err(e) => println!("      ⚠️  Intent exists: {}", e),
 						}
@@ -320,18 +314,15 @@ async fn clear_intents() -> Result<()> {
 	use cli::db;
 
 	let db = db::init().await?;
-	
+
 	// Delete all intents
-	db.db
-		.query("DELETE FROM intent")
-		.await?
-		.check()?;
-	
+	db.db.query("DELETE FROM intent").await?.check()?;
+
 	println!("   ✅ Deleted all intent records");
-	
+
 	// Keep locations - they're still valid
 	println!("   ℹ️  Location records preserved");
-	
+
 	Ok(())
 }
 
@@ -344,18 +335,21 @@ async fn reset_and_import() -> Result<()> {
 		let db = db::init().await?;
 		println!("   🗑️  Clearing database...");
 		// Drop and recreate tables to avoid lock issues
-		db.db.query("REMOVE TABLE IF EXISTS intent; REMOVE TABLE IF EXISTS location;").await?.check()?;
+		db.db
+			.query("REMOVE TABLE IF EXISTS intent; REMOVE TABLE IF EXISTS location;")
+			.await?
+			.check()?;
 		println!("   ✅ Database cleared");
 		// Explicitly close connection
 		drop(db);
 	}
-	
+
 	// Wait for SurrealDB to release locks
 	tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-	
+
 	// Now import configuration with fresh connection
 	println!("\n📥 Importing configuration...\n");
 	import_config(None).await?;
-	
+
 	Ok(())
 }

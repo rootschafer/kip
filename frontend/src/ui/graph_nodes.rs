@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-
 use daemon::{DragState, Graph};
 use kip_core::graph_types::*;
 
@@ -41,7 +40,7 @@ pub fn FileNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 	let width = node.width;
 	let height = node.height;
 	let is_selected = graph().selected.contains(&node_id);
-	
+
 	// Get file type icon
 	let file_icon = match &node.kind {
 		NodeKind::File { file_type } => file_type.icon(),
@@ -60,62 +59,62 @@ pub fn FileNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 			"data-node-id": "{node_id}",
 			style: "left: {x}px; top: {y}px; width: {width}px; height: {height}px; --node-color: {color};",
 			onmousedown: move |e: MouseEvent| {
-				e.stop_propagation();
-				let coords = e.client_coordinates();
-				let (screen_x, screen_y) = (coords.x, coords.y);
-				let (viewport_x, viewport_y, viewport_scale) = graph
-					.with(|g| (g.viewport_x, g.viewport_y, g.viewport_scale));
-				let mx = (screen_x - viewport_x) / viewport_scale;
-				let my = (screen_y - 61.0 - viewport_y) / viewport_scale;
-				let node_id_for_drag = node_id_mousedown.clone();
-				if e.modifiers().shift() {
-					graph.with_mut(|g| g.toggle_select(&node_id_for_drag));
-				} else if e.modifiers().ctrl() || e.modifiers().alt() {
-					let center_x = x + width / 2.0;
-					let center_y = y + height / 2.0;
-					graph
-						.with_mut(|g| {
-							g.drag_state = DragState::CreatingEdge {
-								source_id: node_id_for_drag.clone(),
-								source_x: center_x,
-								source_y: center_y,
-								mouse_x: mx,
-								mouse_y: my,
-							};
-						});
-				} else {
-					graph
-						.with_mut(|g| {
-							g.drag_state = DragState::ClickPending {
-								node_id: node_id_for_drag.clone(),
-								start_x: mx,
-								start_y: my,
-								mouse_x: mx,
-								mouse_y: my,
-							};
-						});
-				}
+			    e.stop_propagation();
+			    let coords = e.client_coordinates();
+			    let (screen_x, screen_y) = (coords.x, coords.y);
+			    let (viewport_x, viewport_y, viewport_scale) = graph
+			        .with(|g| (g.viewport_x, g.viewport_y, g.viewport_scale));
+			    let mx = (screen_x - viewport_x) / viewport_scale;
+			    let my = (screen_y - 61.0 - viewport_y) / viewport_scale;
+			    let node_id_for_drag = node_id_mousedown.clone();
+			    if e.modifiers().shift() {
+			        graph.with_mut(|g| g.toggle_select(&node_id_for_drag));
+			    } else if e.modifiers().ctrl() || e.modifiers().alt() {
+			        let center_x = x + width / 2.0;
+			        let center_y = y + height / 2.0;
+			        graph
+			            .with_mut(|g| {
+			                g.drag_state = DragState::CreatingEdge {
+			                    source_id: node_id_for_drag.clone(),
+			                    source_x: center_x,
+			                    source_y: center_y,
+			                    mouse_x: mx,
+			                    mouse_y: my,
+			                };
+			            });
+			    } else {
+			        graph
+			            .with_mut(|g| {
+			                g.drag_state = DragState::ClickPending {
+			                    node_id: node_id_for_drag.clone(),
+			                    start_x: mx,
+			                    start_y: my,
+			                    mouse_x: mx,
+			                    mouse_y: my,
+			                };
+			            });
+			    }
 			},
 			onmouseup: move |e: MouseEvent| {
-				e.stop_propagation();
-				let drag_state = graph().drag_state.clone();
-				match &drag_state {
-					DragState::CreatingEdge { source_id, .. } => {
-						// Edge creation handled in graph.rs workspace onmouseup
-						// Release the node - handled by workspace, but we need to reset drag state
-						if source_id != &node_id_mouseup {}
-					}
-					DragState::Dragging { .. } => {
-						graph
-							.with_mut(|g| {
-								g.release_node_position(&node_id_mouseup);
-								g.release_selected_nodes();
-								g.start_simulation();
-								g.drag_state = DragState::None;
-							});
-					}
-					_ => {}
-				}
+			    e.stop_propagation();
+			    let drag_state = graph().drag_state.clone();
+			    match &drag_state {
+			        DragState::CreatingEdge { source_id, .. } => {
+			            // Edge creation handled in graph.rs workspace onmouseup
+			            // Release the node - handled by workspace, but we need to reset drag state
+			            if source_id != &node_id_mouseup {}
+			        }
+			        DragState::Dragging { .. } => {
+			            graph
+			                .with_mut(|g| {
+			                    g.release_node_position(&node_id_mouseup);
+			                    g.release_selected_nodes();
+			                    g.start_simulation();
+			                    g.drag_state = DragState::None;
+			                });
+			        }
+			        _ => {}
+			    }
 			},
 			div { class: "file-node-content",
 				span { class: "file-node-icon", "{file_icon}" }
@@ -153,61 +152,61 @@ pub fn DirNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 			"data-node-id": "{node_id}",
 			style: "left: {x}px; top: {y}px; width: {width}px; height: {height}px; --node-color: {color};",
 			onmousedown: move |e: MouseEvent| {
-				e.stop_propagation();
-				let coords = e.client_coordinates();
-				let (screen_x, screen_y) = (coords.x, coords.y);
-				let (viewport_x, viewport_y, viewport_scale) = graph
-					.with(|g| (g.viewport_x, g.viewport_y, g.viewport_scale));
-				let mx = (screen_x - viewport_x) / viewport_scale;
-				let my = (screen_y - 61.0 - viewport_y) / viewport_scale;
-				let node_id_for_drag = node_id_mousedown.clone();
-				if e.modifiers().shift() {
-					graph.with_mut(|g| g.toggle_select(&node_id_for_drag));
-				} else if e.modifiers().ctrl() || e.modifiers().alt() {
-					let center_x = x + width / 2.0;
-					let center_y = y + height / 2.0;
-					graph
-						.with_mut(|g| {
-							g.drag_state = DragState::CreatingEdge {
-								source_id: node_id_for_drag.clone(),
-								source_x: center_x,
-								source_y: center_y,
-								mouse_x: mx,
-								mouse_y: my,
-							};
-						});
-				} else {
-					graph
-						.with_mut(|g| {
-							g.drag_state = DragState::ClickPending {
-								node_id: node_id_for_drag.clone(),
-								start_x: mx,
-								start_y: my,
-								mouse_x: mx,
-								mouse_y: my,
-							};
-						});
-				}
+			    e.stop_propagation();
+			    let coords = e.client_coordinates();
+			    let (screen_x, screen_y) = (coords.x, coords.y);
+			    let (viewport_x, viewport_y, viewport_scale) = graph
+			        .with(|g| (g.viewport_x, g.viewport_y, g.viewport_scale));
+			    let mx = (screen_x - viewport_x) / viewport_scale;
+			    let my = (screen_y - 61.0 - viewport_y) / viewport_scale;
+			    let node_id_for_drag = node_id_mousedown.clone();
+			    if e.modifiers().shift() {
+			        graph.with_mut(|g| g.toggle_select(&node_id_for_drag));
+			    } else if e.modifiers().ctrl() || e.modifiers().alt() {
+			        let center_x = x + width / 2.0;
+			        let center_y = y + height / 2.0;
+			        graph
+			            .with_mut(|g| {
+			                g.drag_state = DragState::CreatingEdge {
+			                    source_id: node_id_for_drag.clone(),
+			                    source_x: center_x,
+			                    source_y: center_y,
+			                    mouse_x: mx,
+			                    mouse_y: my,
+			                };
+			            });
+			    } else {
+			        graph
+			            .with_mut(|g| {
+			                g.drag_state = DragState::ClickPending {
+			                    node_id: node_id_for_drag.clone(),
+			                    start_x: mx,
+			                    start_y: my,
+			                    mouse_x: mx,
+			                    mouse_y: my,
+			                };
+			            });
+			    }
 			},
 			onmouseup: move |e: MouseEvent| {
-				e.stop_propagation();
-				let drag_state = graph().drag_state.clone();
-				match &drag_state {
-					DragState::CreatingEdge { source_id, .. } => {
-						// Edge creation handled in graph.rs workspace onmouseup
-						if source_id != &node_id_mouseup {}
-					}
-					DragState::Dragging { .. } => {
-						graph
-							.with_mut(|g| {
-								g.release_node_position(&node_id_mouseup);
-								g.release_selected_nodes();
-								g.start_simulation();
-								g.drag_state = DragState::None;
-							});
-					}
-					_ => {}
-				}
+			    e.stop_propagation();
+			    let drag_state = graph().drag_state.clone();
+			    match &drag_state {
+			        DragState::CreatingEdge { source_id, .. } => {
+			            // Edge creation handled in graph.rs workspace onmouseup
+			            if source_id != &node_id_mouseup {}
+			        }
+			        DragState::Dragging { .. } => {
+			            graph
+			                .with_mut(|g| {
+			                    g.release_node_position(&node_id_mouseup);
+			                    g.release_selected_nodes();
+			                    g.start_simulation();
+			                    g.drag_state = DragState::None;
+			                });
+			        }
+			        _ => {}
+			    }
 			},
 			div { class: "node-content",
 				span { class: "node-label", "{label}" }
@@ -248,61 +247,61 @@ pub fn GroupNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 			"data-node-id": "{node_id}",
 			style: "left: {x}px; top: {y}px; width: {width}px; height: {height}px; --node-color: {color};",
 			onmousedown: move |e: MouseEvent| {
-				e.stop_propagation();
-				let coords = e.client_coordinates();
-				let (screen_x, screen_y) = (coords.x, coords.y);
-				let (viewport_x, viewport_y, viewport_scale) = graph
-					.with(|g| (g.viewport_x, g.viewport_y, g.viewport_scale));
-				let mx = (screen_x - viewport_x) / viewport_scale;
-				let my = (screen_y - 61.0 - viewport_y) / viewport_scale;
-				let node_id_for_drag = node_id_mousedown.clone();
-				if e.modifiers().shift() {
-					graph.with_mut(|g| g.toggle_select(&node_id_for_drag));
-				} else if e.modifiers().ctrl() || e.modifiers().alt() {
-					let center_x = x + width / 2.0;
-					let center_y = y + height / 2.0;
-					graph
-						.with_mut(|g| {
-							g.drag_state = DragState::CreatingEdge {
-								source_id: node_id_for_drag.clone(),
-								source_x: center_x,
-								source_y: center_y,
-								mouse_x: mx,
-								mouse_y: my,
-							};
-						});
-				} else {
-					graph
-						.with_mut(|g| {
-							g.drag_state = DragState::ClickPending {
-								node_id: node_id_for_drag.clone(),
-								start_x: mx,
-								start_y: my,
-								mouse_x: mx,
-								mouse_y: my,
-							};
-						});
-				}
+			    e.stop_propagation();
+			    let coords = e.client_coordinates();
+			    let (screen_x, screen_y) = (coords.x, coords.y);
+			    let (viewport_x, viewport_y, viewport_scale) = graph
+			        .with(|g| (g.viewport_x, g.viewport_y, g.viewport_scale));
+			    let mx = (screen_x - viewport_x) / viewport_scale;
+			    let my = (screen_y - 61.0 - viewport_y) / viewport_scale;
+			    let node_id_for_drag = node_id_mousedown.clone();
+			    if e.modifiers().shift() {
+			        graph.with_mut(|g| g.toggle_select(&node_id_for_drag));
+			    } else if e.modifiers().ctrl() || e.modifiers().alt() {
+			        let center_x = x + width / 2.0;
+			        let center_y = y + height / 2.0;
+			        graph
+			            .with_mut(|g| {
+			                g.drag_state = DragState::CreatingEdge {
+			                    source_id: node_id_for_drag.clone(),
+			                    source_x: center_x,
+			                    source_y: center_y,
+			                    mouse_x: mx,
+			                    mouse_y: my,
+			                };
+			            });
+			    } else {
+			        graph
+			            .with_mut(|g| {
+			                g.drag_state = DragState::ClickPending {
+			                    node_id: node_id_for_drag.clone(),
+			                    start_x: mx,
+			                    start_y: my,
+			                    mouse_x: mx,
+			                    mouse_y: my,
+			                };
+			            });
+			    }
 			},
 			onmouseup: move |e: MouseEvent| {
-				e.stop_propagation();
-				let drag_state = graph().drag_state.clone();
-				match &drag_state {
-					DragState::CreatingEdge { source_id, .. } => {
-						// Edge creation handled in graph.rs workspace onmouseup
-						if source_id != &node_id_mouseup {}
-					}
-					DragState::Dragging { .. } => {
-						graph
-							.with_mut(|g| {
-								g.release_node_position(&node_id_mouseup);
-								g.release_selected_nodes();
-								g.start_simulation();
-								g.drag_state = DragState::None;
-							});
-					}
-					_ => {}
-				}
+			    e.stop_propagation();
+			    let drag_state = graph().drag_state.clone();
+			    match &drag_state {
+			        DragState::CreatingEdge { source_id, .. } => {
+			            // Edge creation handled in graph.rs workspace onmouseup
+			            if source_id != &node_id_mouseup {}
+			        }
+			        DragState::Dragging { .. } => {
+			            graph
+			                .with_mut(|g| {
+			                    g.release_node_position(&node_id_mouseup);
+			                    g.release_selected_nodes();
+			                    g.start_simulation();
+			                    g.drag_state = DragState::None;
+			                });
+			        }
+			        _ => {}
+			    }
 			},
 			div { class: "node-content",
 				span { class: "node-label", "{label}" }
@@ -338,61 +337,61 @@ pub fn MachineNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 			"data-node-id": "{node_id}",
 			style: "left: {x}px; top: {y}px; width: {width}px; height: {height}px; --node-color: {color};",
 			onmousedown: move |e: MouseEvent| {
-				e.stop_propagation();
-				let coords = e.client_coordinates();
-				let (screen_x, screen_y) = (coords.x, coords.y);
-				let (viewport_x, viewport_y, viewport_scale) = graph
-					.with(|g| (g.viewport_x, g.viewport_y, g.viewport_scale));
-				let mx = (screen_x - viewport_x) / viewport_scale;
-				let my = (screen_y - 61.0 - viewport_y) / viewport_scale;
-				let node_id_for_drag = node_id_mousedown.clone();
-				if e.modifiers().shift() {
-					graph.with_mut(|g| g.toggle_select(&node_id_for_drag));
-				} else if e.modifiers().ctrl() || e.modifiers().alt() {
-					let center_x = x + width / 2.0;
-					let center_y = y + height / 2.0;
-					graph
-						.with_mut(|g| {
-							g.drag_state = DragState::CreatingEdge {
-								source_id: node_id_for_drag.clone(),
-								source_x: center_x,
-								source_y: center_y,
-								mouse_x: mx,
-								mouse_y: my,
-							};
-						});
-				} else {
-					graph
-						.with_mut(|g| {
-							g.drag_state = DragState::ClickPending {
-								node_id: node_id_for_drag.clone(),
-								start_x: mx,
-								start_y: my,
-								mouse_x: mx,
-								mouse_y: my,
-							};
-						});
-				}
+			    e.stop_propagation();
+			    let coords = e.client_coordinates();
+			    let (screen_x, screen_y) = (coords.x, coords.y);
+			    let (viewport_x, viewport_y, viewport_scale) = graph
+			        .with(|g| (g.viewport_x, g.viewport_y, g.viewport_scale));
+			    let mx = (screen_x - viewport_x) / viewport_scale;
+			    let my = (screen_y - 61.0 - viewport_y) / viewport_scale;
+			    let node_id_for_drag = node_id_mousedown.clone();
+			    if e.modifiers().shift() {
+			        graph.with_mut(|g| g.toggle_select(&node_id_for_drag));
+			    } else if e.modifiers().ctrl() || e.modifiers().alt() {
+			        let center_x = x + width / 2.0;
+			        let center_y = y + height / 2.0;
+			        graph
+			            .with_mut(|g| {
+			                g.drag_state = DragState::CreatingEdge {
+			                    source_id: node_id_for_drag.clone(),
+			                    source_x: center_x,
+			                    source_y: center_y,
+			                    mouse_x: mx,
+			                    mouse_y: my,
+			                };
+			            });
+			    } else {
+			        graph
+			            .with_mut(|g| {
+			                g.drag_state = DragState::ClickPending {
+			                    node_id: node_id_for_drag.clone(),
+			                    start_x: mx,
+			                    start_y: my,
+			                    mouse_x: mx,
+			                    mouse_y: my,
+			                };
+			            });
+			    }
 			},
 			onmouseup: move |e: MouseEvent| {
-				e.stop_propagation();
-				let drag_state = graph().drag_state.clone();
-				match &drag_state {
-					DragState::CreatingEdge { source_id, .. } => {
-						// Edge creation handled in graph.rs workspace onmouseup
-						if source_id != &node_id_mouseup {}
-					}
-					DragState::Dragging { .. } => {
-						graph
-							.with_mut(|g| {
-								g.release_node_position(&node_id_mouseup);
-								g.release_selected_nodes();
-								g.start_simulation();
-								g.drag_state = DragState::None;
-							});
-					}
-					_ => {}
-				}
+			    e.stop_propagation();
+			    let drag_state = graph().drag_state.clone();
+			    match &drag_state {
+			        DragState::CreatingEdge { source_id, .. } => {
+			            // Edge creation handled in graph.rs workspace onmouseup
+			            if source_id != &node_id_mouseup {}
+			        }
+			        DragState::Dragging { .. } => {
+			            graph
+			                .with_mut(|g| {
+			                    g.release_node_position(&node_id_mouseup);
+			                    g.release_selected_nodes();
+			                    g.start_simulation();
+			                    g.drag_state = DragState::None;
+			                });
+			        }
+			        _ => {}
+			    }
 			},
 			div { class: "node-content",
 				span { class: "node-label", "{label}" }
@@ -440,61 +439,61 @@ pub fn DriveNode(graph: Signal<Graph>, node: GraphNode) -> Element {
 			"data-node-id": "{node_id}",
 			style: "left: {x}px; top: {y}px; width: {width}px; height: {height}px; --node-color: {color};",
 			onmousedown: move |e: MouseEvent| {
-				e.stop_propagation();
-				let coords = e.client_coordinates();
-				let (screen_x, screen_y) = (coords.x, coords.y);
-				let (viewport_x, viewport_y, viewport_scale) = graph
-					.with(|g| (g.viewport_x, g.viewport_y, g.viewport_scale));
-				let mx = (screen_x - viewport_x) / viewport_scale;
-				let my = (screen_y - 61.0 - viewport_y) / viewport_scale;
-				let node_id_for_drag = node_id_mousedown.clone();
-				if e.modifiers().shift() {
-					graph.with_mut(|g| g.toggle_select(&node_id_for_drag));
-				} else if e.modifiers().ctrl() || e.modifiers().alt() {
-					let center_x = x + width / 2.0;
-					let center_y = y + height / 2.0;
-					graph
-						.with_mut(|g| {
-							g.drag_state = DragState::CreatingEdge {
-								source_id: node_id_for_drag.clone(),
-								source_x: center_x,
-								source_y: center_y,
-								mouse_x: mx,
-								mouse_y: my,
-							};
-						});
-				} else {
-					graph
-						.with_mut(|g| {
-							g.drag_state = DragState::ClickPending {
-								node_id: node_id_for_drag.clone(),
-								start_x: mx,
-								start_y: my,
-								mouse_x: mx,
-								mouse_y: my,
-							};
-						});
-				}
+			    e.stop_propagation();
+			    let coords = e.client_coordinates();
+			    let (screen_x, screen_y) = (coords.x, coords.y);
+			    let (viewport_x, viewport_y, viewport_scale) = graph
+			        .with(|g| (g.viewport_x, g.viewport_y, g.viewport_scale));
+			    let mx = (screen_x - viewport_x) / viewport_scale;
+			    let my = (screen_y - 61.0 - viewport_y) / viewport_scale;
+			    let node_id_for_drag = node_id_mousedown.clone();
+			    if e.modifiers().shift() {
+			        graph.with_mut(|g| g.toggle_select(&node_id_for_drag));
+			    } else if e.modifiers().ctrl() || e.modifiers().alt() {
+			        let center_x = x + width / 2.0;
+			        let center_y = y + height / 2.0;
+			        graph
+			            .with_mut(|g| {
+			                g.drag_state = DragState::CreatingEdge {
+			                    source_id: node_id_for_drag.clone(),
+			                    source_x: center_x,
+			                    source_y: center_y,
+			                    mouse_x: mx,
+			                    mouse_y: my,
+			                };
+			            });
+			    } else {
+			        graph
+			            .with_mut(|g| {
+			                g.drag_state = DragState::ClickPending {
+			                    node_id: node_id_for_drag.clone(),
+			                    start_x: mx,
+			                    start_y: my,
+			                    mouse_x: mx,
+			                    mouse_y: my,
+			                };
+			            });
+			    }
 			},
 			onmouseup: move |e: MouseEvent| {
-				e.stop_propagation();
-				let drag_state = graph().drag_state.clone();
-				match &drag_state {
-					DragState::CreatingEdge { source_id, .. } => {
-						// Edge creation handled in graph.rs workspace onmouseup
-						if source_id != &node_id_mouseup {}
-					}
-					DragState::Dragging { .. } => {
-						graph
-							.with_mut(|g| {
-								g.release_node_position(&node_id_mouseup);
-								g.release_selected_nodes();
-								g.start_simulation();
-								g.drag_state = DragState::None;
-							});
-					}
-					_ => {}
-				}
+			    e.stop_propagation();
+			    let drag_state = graph().drag_state.clone();
+			    match &drag_state {
+			        DragState::CreatingEdge { source_id, .. } => {
+			            // Edge creation handled in graph.rs workspace onmouseup
+			            if source_id != &node_id_mouseup {}
+			        }
+			        DragState::Dragging { .. } => {
+			            graph
+			                .with_mut(|g| {
+			                    g.release_node_position(&node_id_mouseup);
+			                    g.release_selected_nodes();
+			                    g.start_simulation();
+			                    g.drag_state = DragState::None;
+			                });
+			        }
+			        _ => {}
+			    }
 			},
 			div { class: "node-content",
 				span { class: "node-label", "{label}" }

@@ -1,9 +1,9 @@
 //! Intent management API
 
 use chrono::Utc;
+use daemon::DbHandle;
 
 use crate::api::{KipError, LocationId, RunResult};
-use daemon::DbHandle;
 
 /// Create a new intent
 pub async fn create_intent(

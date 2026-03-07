@@ -46,14 +46,18 @@ pub fn verify_git_repo(path: &PathBuf) -> Result<GitVerificationResult> {
 	// Check if path exists and is a git repo
 	if !path.exists() {
 		result.is_ready = false;
-		result.details.push(format!("Path does not exist: {}", path.display()));
+		result
+			.details
+			.push(format!("Path does not exist: {}", path.display()));
 		return Ok(result);
 	}
 
 	let git_dir = path.join(".git");
 	if !git_dir.exists() {
 		result.is_ready = false;
-		result.details.push(format!("Not a git repository: {}", path.display()));
+		result
+			.details
+			.push(format!("Not a git repository: {}", path.display()));
 		return Ok(result);
 	}
 
@@ -65,18 +69,25 @@ pub fn verify_git_repo(path: &PathBuf) -> Result<GitVerificationResult> {
 		.context("Failed to run git status")?;
 
 	let status_stdout = String::from_utf8_lossy(&status_output.stdout);
-	let uncommitted: Vec<&str> = status_stdout.lines().filter(|line| !line.is_empty()).collect();
+	let uncommitted: Vec<&str> = status_stdout
+		.lines()
+		.filter(|line| !line.is_empty())
+		.collect();
 
 	result.uncommitted_count = uncommitted.len();
 
 	if result.uncommitted_count > 0 {
 		result.is_ready = false;
-		result.details.push(format!("{} uncommitted change(s):", result.uncommitted_count));
+		result
+			.details
+			.push(format!("{} uncommitted change(s):", result.uncommitted_count));
 		for line in uncommitted.iter().take(5) {
 			result.details.push(format!("  - {}", line));
 		}
 		if result.uncommitted_count > 5 {
-			result.details.push(format!("  ... and {} more", result.uncommitted_count - 5));
+			result
+				.details
+				.push(format!("  ... and {} more", result.uncommitted_count - 5));
 		}
 	}
 
@@ -106,11 +117,15 @@ pub fn verify_git_repo(path: &PathBuf) -> Result<GitVerificationResult> {
 
 				if result.commits_ahead > 0 {
 					result.is_ready = false;
-					result.details.push(format!("{} commit(s) ahead of remote (not pushed)", result.commits_ahead));
+					result
+						.details
+						.push(format!("{} commit(s) ahead of remote (not pushed)", result.commits_ahead));
 				}
 
 				if result.commits_behind > 0 {
-					result.details.push(format!("{} commit(s) behind remote (pull to sync)", result.commits_behind));
+					result
+						.details
+						.push(format!("{} commit(s) behind remote (pull to sync)", result.commits_behind));
 					// Being behind doesn't make it not ready for backup
 				}
 			}
@@ -145,7 +160,11 @@ pub fn print_verification_results(results: &[GitVerificationResult]) {
 	for result in results {
 		if result.is_ready {
 			ready_count += 1;
-			println!("{} {} - Ready for backup", style("✅").green(), style(result.path.display()).bold());
+			println!(
+				"{} {} - Ready for backup",
+				style("✅").green(),
+				style(result.path.display()).bold()
+			);
 		} else {
 			not_ready_count += 1;
 			println!("{} {} - NOT ready", style("❌").red(), style(result.path.display()).bold());
@@ -179,7 +198,11 @@ pub enum GitRepoAction {
 pub fn handle_git_repo_with_issues(result: &GitVerificationResult) -> GitRepoAction {
 	use std::io::{self, Write};
 
-	println!("\n{} Git repo at {} has issues:", style("⚠️").yellow(), style(result.path.display()).bold());
+	println!(
+		"\n{} Git repo at {} has issues:",
+		style("⚠️").yellow(),
+		style(result.path.display()).bold()
+	);
 	for detail in &result.details {
 		println!("   {}", style(detail).dim());
 	}

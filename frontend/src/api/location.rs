@@ -2,8 +2,9 @@
 
 use std::path::PathBuf;
 
-use crate::api::{KipError, LocationId, LocationSummary, MachineKind, MachineSummary};
 use daemon::DbHandle;
+
+use crate::api::{KipError, LocationId, LocationSummary, MachineKind, MachineSummary};
 
 /// Add a new location
 pub async fn add_location(

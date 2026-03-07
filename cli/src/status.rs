@@ -11,7 +11,6 @@ use std::{
 use anyhow::{Context, Result};
 use console::style;
 use serde::{Deserialize, Serialize};
-
 #[cfg(unix)]
 use libc;
 
@@ -55,16 +54,14 @@ impl BackupStatus {
 			return Ok(Self::default());
 		}
 
-		let content = fs::read_to_string(&path)
-			.context("Failed to read status file")?;
-		serde_json::from_str(&content)
-			.context("Failed to parse status file")
+		let content = fs::read_to_string(&path).context("Failed to read status file")?;
+		serde_json::from_str(&content).context("Failed to parse status file")
 	}
 
 	/// Save status to file
 	pub fn save(&self) -> Result<()> {
 		let path = Self::status_file_path();
-		
+
 		// Ensure parent directory exists
 		if let Some(parent) = path.parent() {
 			fs::create_dir_all(parent)?;
@@ -104,14 +101,11 @@ impl BackupStatus {
 	/// Calculate ETA based on current progress
 	pub fn eta(&self) -> Option<Duration> {
 		if let (Some(started), Some(total), _) = (self.started_at, self.total_folders, &self.current_folder) {
-			let now = SystemTime::now()
-				.duration_since(UNIX_EPOCH)
-				.ok()?
-				.as_secs();
-			
+			let now = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs();
+
 			let elapsed = now - started;
 			let completed = self.completed_folders;
-			
+
 			if completed > 0 && elapsed > 0 {
 				let rate = completed as f64 / elapsed as f64; // folders per second
 				let remaining = total.saturating_sub(completed);
@@ -148,7 +142,10 @@ pub fn show_status() -> Result<()> {
 			println!("   Last update: {} seconds ago", ago);
 		}
 		println!();
-		println!("   {} Stale status file detected. Run `kip status --clear` to reset", style("💡").blue());
+		println!(
+			"   {} Stale status file detected. Run `kip status --clear` to reset",
+			style("💡").blue()
+		);
 		return Ok(());
 	}
 
@@ -179,13 +176,8 @@ pub fn show_status() -> Result<()> {
 		} else {
 			0
 		};
-		println!("{} {} / {} folders ({}%)", 
-			style("Progress:").bold(), 
-			completed, 
-			total, 
-			percent
-		);
-		
+		println!("{} {} / {} folders ({}%)", style("Progress:").bold(), completed, total, percent);
+
 		// Progress bar
 		let bar_width = 40;
 		let filled = (percent as f64 / 100.0 * bar_width as f64) as usize;
@@ -205,8 +197,9 @@ pub fn show_status() -> Result<()> {
 	}
 
 	if status.bytes_transferred > 0 {
-		println!("{} {}", 
-			style("Transferred:").bold(), 
+		println!(
+			"{} {}",
+			style("Transferred:").bold(),
 			crate::progress::format_bytes(status.bytes_transferred)
 		);
 	}

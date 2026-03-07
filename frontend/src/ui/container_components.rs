@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-
 use kip_core::graph_types::ContainerView;
 
 // ─── MachineChip ─────────────────────────────────────────────

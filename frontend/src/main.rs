@@ -3,11 +3,11 @@
 #[cfg(feature = "desktop")]
 mod app;
 #[cfg(feature = "desktop")]
+mod devices;
+#[cfg(feature = "desktop")]
 mod ui;
 #[cfg(feature = "desktop")]
 mod util;
-#[cfg(feature = "desktop")]
-mod devices;
 
 #[cfg(feature = "desktop")]
 use dioxus::prelude::*;

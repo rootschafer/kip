@@ -2,9 +2,9 @@ use std::collections::HashSet;
 
 use surrealdb::types::{RecordId, RecordIdKey, SurrealValue};
 use tracing::{info, warn};
+use kip_core::*;
 
 use crate::db::DbHandle;
-use kip_core::*;
 
 // ─── Force simulation constants ───────────────────────────────
 

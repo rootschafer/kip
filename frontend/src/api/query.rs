@@ -1,7 +1,8 @@
 //! Query API - Read-only operations
 
-use crate::api::{DriveStatus, IntentCounts, KipError, ReviewCounts, StatusSummary, TransferCounts};
 use daemon::DbHandle;
+
+use crate::api::{DriveStatus, IntentCounts, KipError, ReviewCounts, StatusSummary, TransferCounts};
 
 /// Get overall system status
 pub async fn status(db: &DbHandle) -> Result<StatusSummary, KipError> {

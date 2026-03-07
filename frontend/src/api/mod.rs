@@ -18,6 +18,5 @@ pub use location::*;
 pub use review::*;
 pub use query::*;
 pub use config::*;
-
 // Re-export common types
 pub use daemon::DbHandle;

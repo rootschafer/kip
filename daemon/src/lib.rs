@@ -12,6 +12,7 @@ pub mod db;
 pub mod engine;
 pub mod graph_store;
 
-pub use graph_store::{Graph, DragState};
-pub use graph_store::{rid_string, load_graph_data, scan_directory, save_node_position, add_remote_machine};
+pub use graph_store::{
+	add_remote_machine, load_graph_data, rid_string, save_node_position, scan_directory, DragState, Graph,
+};
 pub use db::DbHandle;

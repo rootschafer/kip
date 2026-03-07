@@ -66,15 +66,15 @@ impl SubAssign for Vec2 {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FileType {
-	Code,      // .rs, .js, .py, .ts, .cpp, .h, etc
-	Document,  // .txt, .md, .pdf, .doc, etc
-	Config,    // .json, .yaml, .toml, .ini, .env, etc
-	Image,     // .png, .jpg, .gif, .svg, etc
-	Audio,     // .mp3, .wav, .flac, etc
-	Video,     // .mp4, .mov, .avi, etc
-	Archive,   // .zip, .tar, .gz, .7z, etc
-	Binary,    // Executables, compiled files
-	Unknown,   // Everything else
+	Code,     // .rs, .js, .py, .ts, .cpp, .h, etc
+	Document, // .txt, .md, .pdf, .doc, etc
+	Config,   // .json, .yaml, .toml, .ini, .env, etc
+	Image,    // .png, .jpg, .gif, .svg, etc
+	Audio,    // .mp3, .wav, .flac, etc
+	Video,    // .mp4, .mov, .avi, etc
+	Archive,  // .zip, .tar, .gz, .7z, etc
+	Binary,   // Executables, compiled files
+	Unknown,  // Everything else
 }
 
 impl FileType {
@@ -84,9 +84,10 @@ impl FileType {
 			.and_then(|e| e.to_str())
 			.unwrap_or("")
 			.to_lowercase();
-		
+
 		match ext.as_str() {
-			"rs" | "js" | "ts" | "jsx" | "tsx" | "py" | "cpp" | "c" | "h" | "hpp" | "go" | "rb" | "sh" | "bash" | "zsh" => FileType::Code,
+			"rs" | "js" | "ts" | "jsx" | "tsx" | "py" | "cpp" | "c" | "h" | "hpp" | "go" | "rb" | "sh" | "bash"
+			| "zsh" => FileType::Code,
 			"txt" | "md" | "markdown" | "pdf" | "doc" | "docx" | "rtf" | "odt" => FileType::Document,
 			"json" | "yaml" | "yml" | "toml" | "ini" | "env" | "config" | "cfg" => FileType::Config,
 			"png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "ico" | "bmp" => FileType::Image,
@@ -97,7 +98,7 @@ impl FileType {
 			_ => FileType::Unknown,
 		}
 	}
-	
+
 	pub fn icon(&self) -> &'static str {
 		match self {
 			FileType::Code => "📝",

@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-
 use daemon::{DragState, Graph};
 use kip_core::graph_types::*;
 
@@ -56,23 +55,23 @@ pub fn GraphSvgOverlay(
 			// Render all visible edges - connect node centers with straight lines
 			for edge in visible_edges.iter() {
 				{
-					let source_node = graph_snapshot.find_node(&edge.source_id);
-					let dest_node = graph_snapshot.find_node(&edge.dest_id);
-					if let (Some(source), Some(dest)) = (source_node, dest_node) {
-						let sx = source.center_x();
-						let sy = source.center_y();
-						let dx = dest.center_x();
-						let dy = dest.center_y();
+				    let source_node = graph_snapshot.find_node(&edge.source_id);
+				    let dest_node = graph_snapshot.find_node(&edge.dest_id);
+				    if let (Some(source), Some(dest)) = (source_node, dest_node) {
+				        let sx = source.center_x();
+				        let sy = source.center_y();
+				        let dx = dest.center_x();
+				        let dy = dest.center_y();
 
-						let path_d = bezier_path(sx, sy, dx, dy);
-						let color = edge_color(&edge.status);
-						let width = if edge.status == "transferring" || edge.status == "scanning" {
-							"3"
-						} else {
-							"2"
-						};
+				        let path_d = bezier_path(sx, sy, dx, dy);
+				        let color = edge_color(&edge.status);
+				        let width = if edge.status == "transferring" || edge.status == "scanning" {
+				            "3"
+				        } else {
+				            "2"
+				        };
 
-						rsx! {
+				        rsx! {
 					path {
 						key: "{edge.id}",
 						d: "{path_d}",
@@ -83,9 +82,9 @@ pub fn GraphSvgOverlay(
 						opacity: "0.5",
 					}
 				}
-					} else {
-						rsx! {}
-					}
+				    } else {
+				        rsx! {}
+				    }
 				}
 			}
 

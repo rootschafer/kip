@@ -39,5 +39,8 @@ pub use check::{check_backup_status, check_server_status};
 pub use validate::validate_all;
 pub use safety::{rsync_dry_run, validate_backup_destination, validate_backup_source, DryRunResult};
 pub use progress::{format_bytes, BackupProgress};
-pub use git_verify::{handle_git_repo_with_issues, is_git_repo, print_verification_results, verify_git_repo, GitRepoAction, GitVerificationResult};
+pub use git_verify::{
+	handle_git_repo_with_issues, is_git_repo, print_verification_results, verify_git_repo, GitRepoAction,
+	GitVerificationResult,
+};
 pub use error::{BackupError, GitError};

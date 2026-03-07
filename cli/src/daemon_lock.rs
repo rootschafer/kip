@@ -25,12 +25,12 @@ fn get_lock_file_path() -> PathBuf {
 /// Returns Ok(true) if lock acquired, Ok(false) if another daemon is running
 pub fn try_acquire_lock() -> Result<bool> {
 	let lock_path = get_lock_file_path();
-	
+
 	// Ensure parent directory exists
 	if let Some(parent) = lock_path.parent() {
 		fs::create_dir_all(parent)?;
 	}
-	
+
 	// Try to create lock file exclusively
 	match File::options()
 		.write(true)
@@ -77,9 +77,7 @@ fn is_process_running(pid: u32) -> bool {
 	#[cfg(unix)]
 	{
 		use libc;
-		unsafe {
-			libc::kill(pid as i32, 0) == 0
-		}
+		unsafe { libc::kill(pid as i32, 0) == 0 }
 	}
 	#[cfg(windows)]
 	{
@@ -94,7 +92,7 @@ pub fn get_running_daemon_pid() -> Option<u32> {
 	if !lock_path.exists() {
 		return None;
 	}
-	
+
 	if let Ok(mut file) = File::open(&lock_path) {
 		let mut contents = String::new();
 		if file.read_to_string(&mut contents).is_ok() {
@@ -105,14 +103,14 @@ pub fn get_running_daemon_pid() -> Option<u32> {
 			}
 		}
 	}
-	
+
 	None
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	
+
 	#[test]
 	fn test_lock_file_path() {
 		let path = get_lock_file_path();

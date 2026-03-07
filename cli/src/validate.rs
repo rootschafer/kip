@@ -252,7 +252,11 @@ fn handle_git_validation(result: &mut ValidationResult) -> Result<()> {
 								println!("{}", "=".repeat(60));
 							}
 							"s" => {
-								println!("   {} Will skip {} in future validations", style("✓").green(), repo_path.display());
+								println!(
+									"   {} Will skip {} in future validations",
+									style("✓").green(),
+									repo_path.display()
+								);
 							}
 							_ => {
 								// Enter or anything else - just skip
