@@ -2,43 +2,19 @@
 //!
 //! Verifies that git repositories are in a backup-ready state:
 //! - No uncommitted changes
-//! - All commits pushed to remote
+//! - All commits pushed to remote (optional)
 
 use std::{path::PathBuf, process::Command};
 
 use anyhow::{Context, Result};
-use serde::Deserialize;
+use console::style;
 use tracing::{debug, info, warn};
-
-/// Git repository configuration
-#[derive(Debug, Clone, Deserialize)]
-pub struct GitRepo {
-	/// Path to the repository
-	pub path: String,
-
-	/// Name for this repo (for logging)
-	pub name: String,
-
-	/// Priority (1-1000)
-	#[serde(default = "default_priority")]
-	pub priority: u16,
-
-	/// Paths to ignore (gitignore-style patterns)
-	#[serde(default)]
-	pub ignored: Vec<String>,
-}
-
-fn default_priority() -> u16 {
-	900
-}
 
 /// Git repository verification result
 #[derive(Debug, Clone)]
 pub struct GitVerificationResult {
 	/// Repository path
 	pub path: PathBuf,
-	/// Repository name
-	pub name: String,
 	/// Whether verification passed
 	pub is_ready: bool,
 	/// Number of uncommitted changes
@@ -47,87 +23,77 @@ pub struct GitVerificationResult {
 	pub commits_ahead: usize,
 	/// Number of commits behind remote
 	pub commits_behind: usize,
+	/// Whether repo has a remote
+	pub has_remote: bool,
 	/// Details about issues
 	pub details: Vec<String>,
 }
 
-/// Verify a single git repository
-pub fn verify_git_repo(repo: &GitRepo) -> Result<GitVerificationResult> {
-	let path = expand_tilde(&repo.path);
-
-	debug!("Verifying git repo: {} at {}", repo.name, path.display());
+/// Verify a git repository
+pub fn verify_git_repo(path: &PathBuf) -> Result<GitVerificationResult> {
+	debug!("Verifying git repo at {}", path.display());
 
 	let mut result = GitVerificationResult {
 		path: path.clone(),
-		name: repo.name.clone(),
 		is_ready: true,
 		uncommitted_count: 0,
 		commits_ahead: 0,
 		commits_behind: 0,
+		has_remote: false,
 		details: Vec::new(),
 	};
 
 	// Check if path exists and is a git repo
 	if !path.exists() {
 		result.is_ready = false;
-		result
-			.details
-			.push(format!("Path does not exist: {}", path.display()));
+		result.details.push(format!("Path does not exist: {}", path.display()));
 		return Ok(result);
 	}
 
 	let git_dir = path.join(".git");
 	if !git_dir.exists() {
 		result.is_ready = false;
-		result
-			.details
-			.push(format!("Not a git repository: {}", path.display()));
+		result.details.push(format!("Not a git repository: {}", path.display()));
 		return Ok(result);
 	}
 
 	// Check for uncommitted changes
 	let status_output = Command::new("git")
 		.args(&["status", "--porcelain"])
-		.current_dir(&path)
+		.current_dir(path)
 		.output()
 		.context("Failed to run git status")?;
 
 	let status_stdout = String::from_utf8_lossy(&status_output.stdout);
-	let uncommitted: Vec<&str> = status_stdout
-		.lines()
-		.filter(|line| !line.is_empty())
-		.collect();
+	let uncommitted: Vec<&str> = status_stdout.lines().filter(|line| !line.is_empty()).collect();
 
 	result.uncommitted_count = uncommitted.len();
 
 	if result.uncommitted_count > 0 {
 		result.is_ready = false;
-		result
-			.details
-			.push(format!("{} uncommitted change(s):", result.uncommitted_count));
+		result.details.push(format!("{} uncommitted change(s):", result.uncommitted_count));
 		for line in uncommitted.iter().take(5) {
 			result.details.push(format!("  - {}", line));
 		}
 		if result.uncommitted_count > 5 {
-			result
-				.details
-				.push(format!("  ... and {} more", result.uncommitted_count - 5));
+			result.details.push(format!("  ... and {} more", result.uncommitted_count - 5));
 		}
 	}
 
 	// Check for unsynced commits
-	// Only check remote sync if we have a remote
-	let has_remote = Command::new("git")
+	let has_remote_output = Command::new("git")
 		.args(&["remote"])
-		.current_dir(&path)
+		.current_dir(path)
 		.output()
 		.map(|o| !o.stdout.is_empty())
 		.unwrap_or(false);
 
-	if has_remote {
+	result.has_remote = has_remote_output;
+
+	if has_remote_output {
 		let rev_list_output = Command::new("git")
 			.args(&["rev-list", "--left-right", "--count", "HEAD...@{u}"])
-			.current_dir(&path)
+			.current_dir(path)
 			.output();
 
 		if let Ok(output) = rev_list_output {
@@ -140,15 +106,11 @@ pub fn verify_git_repo(repo: &GitRepo) -> Result<GitVerificationResult> {
 
 				if result.commits_ahead > 0 {
 					result.is_ready = false;
-					result
-						.details
-						.push(format!("{} commit(s) ahead of remote (not pushed)", result.commits_ahead));
+					result.details.push(format!("{} commit(s) ahead of remote (not pushed)", result.commits_ahead));
 				}
 
 				if result.commits_behind > 0 {
-					result
-						.details
-						.push(format!("{} commit(s) behind remote (pull to sync)", result.commits_behind));
+					result.details.push(format!("{} commit(s) behind remote (pull to sync)", result.commits_behind));
 					// Being behind doesn't make it not ready for backup
 				}
 			}
@@ -156,9 +118,9 @@ pub fn verify_git_repo(repo: &GitRepo) -> Result<GitVerificationResult> {
 	}
 
 	if result.is_ready {
-		info!("✓ Git repo '{}' is ready for backup", repo.name);
+		info!("✓ Git repo at {} is ready for backup", path.display());
 	} else {
-		warn!("✗ Git repo '{}' is NOT ready for backup", repo.name);
+		warn!("✗ Git repo at {} is NOT ready for backup", path.display());
 		for detail in &result.details {
 			debug!("  {}", detail);
 		}
@@ -167,32 +129,13 @@ pub fn verify_git_repo(repo: &GitRepo) -> Result<GitVerificationResult> {
 	Ok(result)
 }
 
-/// Verify all git repositories
-pub fn verify_git_repos(repos: &[GitRepo]) -> Result<Vec<GitVerificationResult>> {
-	let mut results = Vec::new();
-
-	for repo in repos {
-		let result = verify_git_repo(repo)?;
-		results.push(result);
-	}
-
-	Ok(results)
-}
-
-/// Expand tilde in path
-fn expand_tilde(path: &str) -> PathBuf {
-	if path.starts_with('~') {
-		if let Some(home) = dirs::home_dir() {
-			return home.join(path.trim_start_matches('~').trim_start_matches('/'));
-		}
-	}
-	PathBuf::from(path)
+/// Check if a path is a git repository
+pub fn is_git_repo(path: &PathBuf) -> bool {
+	path.join(".git").exists()
 }
 
 /// Print verification results
 pub fn print_verification_results(results: &[GitVerificationResult]) {
-	use console::style;
-
 	println!("\n{}", style("🔍 Git Repository Verification").bold());
 	println!("{}", "=".repeat(60));
 
@@ -202,10 +145,10 @@ pub fn print_verification_results(results: &[GitVerificationResult]) {
 	for result in results {
 		if result.is_ready {
 			ready_count += 1;
-			println!("{} {} - Ready for backup", style("✅").green(), style(&result.name).bold());
+			println!("{} {} - Ready for backup", style("✅").green(), style(result.path.display()).bold());
 		} else {
 			not_ready_count += 1;
-			println!("{} {} - NOT ready", style("❌").red(), style(&result.name).bold());
+			println!("{} {} - NOT ready", style("❌").red(), style(result.path.display()).bold());
 			for detail in &result.details {
 				println!("   {}", style(detail).dim());
 			}
@@ -218,4 +161,81 @@ pub fn print_verification_results(results: &[GitVerificationResult]) {
 		style(ready_count).green().bold(),
 		style(not_ready_count).yellow().bold()
 	);
+}
+
+/// Result of git repo handling
+#[derive(Debug, Clone, PartialEq)]
+pub enum GitRepoAction {
+	/// Backup this repo (git-ignored files only)
+	Backup,
+	/// Skip this repo for this run
+	Skip,
+	/// Skip all remaining repos for this run
+	SkipAll,
+}
+
+/// Interactive prompt for git repos with issues
+/// Returns the action to take
+pub fn handle_git_repo_with_issues(result: &GitVerificationResult) -> GitRepoAction {
+	use std::io::{self, Write};
+
+	println!("\n{} Git repo at {} has issues:", style("⚠️").yellow(), style(result.path.display()).bold());
+	for detail in &result.details {
+		println!("   {}", style(detail).dim());
+	}
+
+	println!();
+	print!("   [L]azygit  [S]kip this  [A]ll skip  [C]ontinue: ");
+	io::stdout().flush().unwrap();
+
+	let mut input = String::new();
+	io::stdin().read_line(&mut input).unwrap();
+
+	match input.trim().to_lowercase().as_str() {
+		"l" => {
+			// Open lazygit and wait for it to close
+			println!("   🚀 Opening lazygit...");
+			println!("   (Press 'q' in lazygit to return)");
+			println!();
+
+			io::stdout().flush().unwrap();
+
+			// Spawn lazygit and wait for it to exit
+			let mut child = std::process::Command::new("lazygit")
+				.current_dir(&result.path)
+				.spawn()
+				.expect("Failed to launch lazygit");
+
+			// Wait for lazygit to close
+			let _ = child.wait();
+
+			// Clear screen after lazygit closes
+			print!("\x1B[2J\x1B[1;1H");
+			io::stdout().flush().unwrap();
+
+			// Re-verify the repo
+			println!("   Re-verifying repository...");
+			let new_result = verify_git_repo(&result.path).unwrap();
+			if new_result.is_ready {
+				println!("   {} Repository is now ready!", style("✅").green());
+				GitRepoAction::Backup
+			} else {
+				println!("   {} Repository still has issues", style("⚠️").yellow());
+				handle_git_repo_with_issues(&new_result)
+			}
+		}
+		"s" => {
+			println!("   {} Skipping this repository for this run", style("✓").green());
+			GitRepoAction::Skip
+		}
+		"a" => {
+			println!("   {} Skipping all remaining repositories for this run", style("✓").green());
+			GitRepoAction::SkipAll
+		}
+		_ => {
+			// Enter or anything else - continue anyway
+			println!("   {} Backing up git-ignored files only", style("✓").green());
+			GitRepoAction::Backup
+		}
+	}
 }

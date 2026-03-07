@@ -37,6 +37,15 @@ pub enum BackupError {
 	},
 
 	#[error(
+        "Insufficient disk space\n  Destination: {dest_path}\n  Required: {required}\n  Available: {available}\n  Hint: Free up space or choose a different destination"
+    )]
+	InsufficientSpace {
+		dest_path: String,
+		required: String,
+		available: String,
+	},
+
+	#[error(
 		"Unsafe backup operation detected\n  Summary: {summary}\n  Hint: Review the dry-run output before proceeding"
 	)]
 	UnsafeOperation { summary: String },

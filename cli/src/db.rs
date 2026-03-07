@@ -57,6 +57,112 @@ pub async fn init() -> Result<DbHandle> {
 	Ok(DbHandle { db })
 }
 
+/// Add a location record to the database
+pub async fn add_location(
+	db: &DbHandle,
+	path: &std::path::Path,
+	label: Option<&str>,
+	machine: Option<&str>,
+) -> Result<String> {
+	let path_str = path.to_string_lossy().to_string();
+	let label_str = label.unwrap_or_else(|| path.file_name().and_then(|s| s.to_str()).unwrap_or("")).to_string();
+	
+	// Check if location already exists
+	let mut response = db
+		.db
+		.query("SELECT id FROM location WHERE path = $path LIMIT 1")
+		.bind(("path", path_str.clone()))
+		.await?
+		.check()?;
+	
+	let existing: Option<Vec<serde_json::Value>> = response.take(0)?;
+	if let Some(rows) = existing {
+		if let Some(row) = rows.first() {
+			if let Some(id) = row["id"].as_str() {
+				return Ok(id.to_string());
+			}
+		}
+	}
+	
+	// Create new location
+	let location_id = format!("location:{}", slug(&path_str));
+	let machine_ref = match machine {
+		Some(m) => format!("machine:{}", slug(m)),
+		None => "machine:local".to_string(),
+	};
+	
+	db.db.query(&format!(
+		"CREATE {} CONTENT {{
+			machine: {},
+			path: $path,
+			label: $label,
+			created_at: time::now(),
+			available: true,
+		}}",
+		location_id, machine_ref
+	))
+	.bind(("path", path_str))
+	.bind(("label", label_str))
+	.await?
+	.check()?;
+	
+	Ok(location_id)
+}
+
+/// Create an intent (sync relationship) between source and destinations
+pub async fn create_intent(
+	db: &DbHandle,
+	source_id: &str,
+	dest_ids: &[String],
+	priority: u16,
+) -> Result<String> {
+	let intent_id = format!("intent:{}", slug(&format!("{}_{}", source_id, dest_ids.join("_"))));
+
+	// Build destinations array using type::thing() for proper record references
+	let dest_array: String = dest_ids
+		.iter()
+		.map(|id| {
+			// Extract table and ID from the record ID
+			if let Some((table, rec_id)) = id.split_once(':') {
+				format!("type::thing('{}', '{}')", table, rec_id)
+			} else {
+				format!("type::thing('location', '{}')", id)
+			}
+		})
+		.collect::<Vec<_>>()
+		.join(", ");
+
+	// Create source reference using type::thing()
+	let source_ref = if let Some((table, rec_id)) = source_id.split_once(':') {
+		format!("type::thing('{}', '{}')", table, rec_id)
+	} else {
+		format!("type::thing('location', '{}')", source_id)
+	};
+
+	db.db.query(&format!(
+		"CREATE {} SET
+			source = {},
+			destinations = [{}],
+			status = 'idle',
+			kind = 'one_shot',
+			speed_mode = 'normal',
+			priority = $priority,
+			created_at = time::now(),
+			updated_at = time::now(),
+			total_files = 0,
+			total_bytes = 0,
+			completed_files = 0,
+			completed_bytes = 0
+		",
+		intent_id, source_ref, dest_array
+	))
+	.bind(("priority", priority as i64))
+	.await?
+	.check()?;
+
+	Ok(intent_id)
+}
+
 /// Record a completed backup transfer in SurrealDB.
 /// This creates/updates records that Kip can read.
 pub async fn record_backup_completion(

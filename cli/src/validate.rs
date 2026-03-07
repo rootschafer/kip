@@ -185,7 +185,7 @@ fn handle_git_validation(result: &mut ValidationResult) -> Result<()> {
 	#[derive(serde::Deserialize, Default)]
 	struct GitReposConfig {
 		#[serde(default, rename = "git")]
-		repos: Vec<git_verify::GitRepo>,
+		repos: Vec<String>,
 	}
 
 	let config: GitReposConfig = toml::from_str(&git_repos_config).context("Failed to parse git_repos.toml")?;
@@ -196,21 +196,16 @@ fn handle_git_validation(result: &mut ValidationResult) -> Result<()> {
 	}
 
 	// Verify each repo
-	let mut skip_repos = std::collections::HashSet::new();
+	for repo_path_str in &config.repos {
+		let repo_path = crate::folder::expand_tilde(&PathBuf::from(repo_path_str));
 
-	for repo in &config.repos {
-		// Check if user wants to skip this repo
-		if skip_repos.contains(&repo.path) {
-			continue;
-		}
-
-		match git_verify::verify_git_repo(repo) {
+		match git_verify::verify_git_repo(&repo_path) {
 			Ok(verify_result) => {
 				if verify_result.is_ready {
-					println!("{} {} - Ready", style("✅").green(), style(&repo.name).bold());
+					println!("{} {} - Ready", style("✅").green(), style(repo_path.display()).bold());
 				} else {
 					// Repo has issues - show interactive options
-					println!("{} {} - NOT ready", style("❌").red(), style(&repo.name).bold());
+					println!("{} {} - NOT ready", style("❌").red(), style(repo_path.display()).bold());
 
 					for detail in &verify_result.details {
 						println!("   {}", style(detail).dim());
@@ -220,7 +215,7 @@ fn handle_git_validation(result: &mut ValidationResult) -> Result<()> {
 					if verify_result.uncommitted_count > 0 {
 						result
 							.git_repos_with_changes
-							.push((repo.path.clone(), verify_result.uncommitted_count));
+							.push((repo_path.display().to_string(), verify_result.uncommitted_count));
 
 						println!();
 						print!("   [L]azygit  [ENTER] Skip  [S]kip forever: ");
@@ -232,7 +227,7 @@ fn handle_git_validation(result: &mut ValidationResult) -> Result<()> {
 						match input.trim().to_lowercase().as_str() {
 							"l" => {
 								// Open lazygit and WAIT for it to close
-								println!("   🚀 Opening lazygit for {}...", repo.path);
+								println!("   🚀 Opening lazygit for {}...", repo_path.display());
 								println!("   (Press 'q' in lazygit to return)");
 								println!();
 
@@ -241,7 +236,7 @@ fn handle_git_validation(result: &mut ValidationResult) -> Result<()> {
 
 								// Spawn lazygit and wait for it to exit
 								let mut child = std::process::Command::new("lazygit")
-									.current_dir(expand_tilde_path(&repo.path))
+									.current_dir(&repo_path)
 									.spawn()
 									.context("Failed to launch lazygit")?;
 
@@ -257,8 +252,7 @@ fn handle_git_validation(result: &mut ValidationResult) -> Result<()> {
 								println!("{}", "=".repeat(60));
 							}
 							"s" => {
-								skip_repos.insert(repo.path.clone());
-								println!("   {} Will skip {} in future validations", style("✓").green(), repo.path);
+								println!("   {} Will skip {} in future validations", style("✓").green(), repo_path.display());
 							}
 							_ => {
 								// Enter or anything else - just skip
@@ -271,8 +265,8 @@ fn handle_git_validation(result: &mut ValidationResult) -> Result<()> {
 			Err(e) => {
 				result
 					.warnings
-					.push(format!("Failed to verify {}: {}", repo.name, e));
-				println!("{} {} - Error: {}", style("⚠").yellow(), style(&repo.name).bold(), e);
+					.push(format!("Failed to verify {}: {}", repo_path.display(), e));
+				println!("{} {} - Error: {}", style("⚠").yellow(), style(repo_path.display()).bold(), e);
 			}
 		}
 	}
@@ -290,7 +284,7 @@ fn handle_git_validation(result: &mut ValidationResult) -> Result<()> {
 }
 
 /// Expand tilde in path
-fn expand_tilde_path(path: &str) -> PathBuf {
+fn expand_tilde(path: &str) -> PathBuf {
 	if path.starts_with('~') {
 		if let Some(home) = dirs::home_dir() {
 			return home.join(path.trim_start_matches('~').trim_start_matches('/'));
