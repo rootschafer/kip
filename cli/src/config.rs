@@ -51,8 +51,45 @@ pub struct Settings {
 pub struct ServerConfig {
 	pub host: Option<String>,
 	pub user: Option<String>,
+	/// Backup root on the server, e.g. `/mnt/backups/kip`.
+	pub path: Option<String>,
 	pub identity_file: Option<String>,
 	pub proxy_command: Option<String>,
+}
+
+/// A [`ServerConfig`] with every required field present.
+///
+/// There is no sensible default for a hostname, login or remote path, so these
+/// are resolved once up front and the caller gets an actionable error naming the
+/// missing key rather than a fabricated value that fails later at the SSH layer.
+pub struct ResolvedServer<'a> {
+	pub host: &'a str,
+	pub user: &'a str,
+	pub path: &'a str,
+}
+
+impl ServerConfig {
+	/// Validate that the `[server]` section is complete enough to connect.
+	pub fn resolve(&self, context: &str) -> Result<ResolvedServer<'_>> {
+		Ok(ResolvedServer {
+			host: require_field(self.host.as_deref(), "host", context, "the server's hostname")?,
+			user: require_field(self.user.as_deref(), "user", context, "the SSH login name")?,
+			path: require_field(self.path.as_deref(), "path", context, "an absolute path on the server")?,
+		})
+	}
+}
+
+/// Return `value`, or an error naming the missing `[server]` key.
+fn require_field<'a>(value: Option<&'a str>, field: &str, context: &str, expects: &str) -> Result<&'a str> {
+	value.filter(|v| !v.trim().is_empty()).ok_or_else(|| {
+		crate::error::BackupError::MissingConfigField {
+			field: field.to_string(),
+			config: format!("{}/*.toml [server]", config_dir().display()),
+			context: context.to_string(),
+			hint: format!("Set `{}` in the [server] section to {}.", field, expects),
+		}
+		.into()
+	})
 }
 
 /// Application-specific folder configuration
@@ -200,22 +237,39 @@ fn load_config_file<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T> {
 	toml::from_str(&content).with_context(|| format!("Failed to parse TOML: {}", path.display()))
 }
 
-/// Get the configuration directory
+/// Directory kip reads its configuration from.
+///
+/// Resolution order, first existing wins:
+///   1. `$KIP_CONFIG_DIR` — explicit override, also what the test suite uses so
+///      it never touches a real user's config.
+///   2. `~/.config/kip`
+///   3. `~/.config/backup-tool` — the pre-rename location, still honoured so
+///      existing installs keep working.
+///
+/// If none exist, `~/.config/kip` is returned as the place to create.
 pub fn config_dir() -> PathBuf {
-	// On macOS, prefer ~/.config over ~/Library/Application Support for easier access
-	#[cfg(target_os = "macos")]
-	{
-		if let Some(home) = dirs::home_dir() {
-			let config = home.join(".config").join("backup-tool");
-			if config.exists() {
-				return config;
-			}
-		}
+	if let Some(dir) = std::env::var_os("KIP_CONFIG_DIR") {
+		return PathBuf::from(dir);
 	}
 
-	dirs::config_dir()
-		.unwrap_or_else(|| PathBuf::from("."))
-		.join("backup-tool")
+	// Prefer ~/.config on every platform: it is where this tool has always
+	// looked, and it keeps the path the same across macOS and Linux.
+	let base = dirs::home_dir()
+		.map(|home| home.join(".config"))
+		.or_else(dirs::config_dir)
+		.unwrap_or_else(|| PathBuf::from("."));
+
+	let current = base.join("kip");
+	if current.exists() {
+		return current;
+	}
+
+	let legacy = base.join("backup-tool");
+	if legacy.exists() {
+		return legacy;
+	}
+
+	current
 }
 
 /// List all configured folders

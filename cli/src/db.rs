@@ -92,7 +92,7 @@ pub async fn add_location(
 	};
 
 	db.db
-		.query(&format!(
+		.query(format!(
 			"CREATE {} CONTENT {{
 			machine: {},
 			path: $path,
@@ -136,7 +136,7 @@ pub async fn create_intent(db: &DbHandle, source_id: &str, dest_ids: &[String], 
 	};
 
 	db.db
-		.query(&format!(
+		.query(format!(
 			"CREATE {} SET
 			source = {},
 			destinations = [{}],
@@ -191,7 +191,7 @@ pub async fn record_backup_completion(
 		.next()
 		.unwrap_or(source_path)
 		.to_string();
-	db.query(&format!(
+	db.query(format!(
 		"UPSERT {} CONTENT {{
 			machine: machine:local,
 			path: $path,
@@ -213,7 +213,7 @@ pub async fn record_backup_completion(
 		.next()
 		.unwrap_or(dest_path)
 		.to_string();
-	db.query(&format!(
+	db.query(format!(
 		"UPSERT {} CONTENT {{
 			path: $path,
 			label: $label,
@@ -231,7 +231,7 @@ pub async fn record_backup_completion(
 	// Record the transfer as a completed intent
 	let intent_id = format!("intent:backup_{}_{}", slug(source_path), slug(drive_name));
 	let intent_name = format!("Backup {} → {}", source_path, drive_name);
-	db.query(&format!(
+	db.query(format!(
 		"UPSERT {} CONTENT {{
 			name: $name,
 			source: {},

@@ -2,7 +2,6 @@
 # edition = "2021"
 # name = "kip"
 # version = "0.1.0"
-# authors = ["Anders <git@anders.place>"]
 
 # [features]
 # backend = [
@@ -46,33 +45,41 @@ members = [
     "daemon",
     "frontend",
     "kip-core",
-    "crates/actix-dioxus-serve",
+    "crates/kip-rsync",
+    "crates/kip-rclone",
 ]
+# NOTE: crates/actix-dioxus-serve was a workspace member but no crate in this
+# workspace depends on it, and it was recorded as a git submodule with no
+# .gitmodules entry — so a fresh clone produced an empty directory and the
+# build failed. Dropped from the workspace; re-add it (with a real .gitmodules
+# entry, or vendored) if the web-serving path is picked back up.
 
 [workspace.dependencies]
 plist = "1"
 serde_json = "1"
 thiserror = "2"
-toml = "0.8"
+# toml = "0.8"
+toml = "1"
 tracing = "0.1"
 tracing-subscriber = "0.3.22"
 tempfile = "3.26.0"
-actix-dioxus-serve = { path = "./crates/actix-dioxus-serve" }
-actix-web = "4"
-actix-files = "0.6"
-actix-web-flash-messages = "0.5"
+anyhow = "1.0"
+parking_lot = "0.12"
+futures = "0.3"
 blake3 = "1"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.4", features = ["derive"] }
-dioxus = { version = "0.7.3" }
-dirs = "5.0"
-rfd = "0.15"
+# dioxus = { version = "0.7.3" }
+dioxus = { version = "0.7.10" }
+dirs = "6.0"
+rfd = "0.17"
 serde = { version = "1", features = ["derive"] }
 surrealdb = { version = "3.0.0", features = ["kv-surrealkv"] }
 surrealdb-types = "3.0.0"
 tokio = { version = "1", features = ["full"] }
 tracing-appender = "0.2.4"
-ulid = "1.1"
+# ulid = "1.1"
+ulid = "3"
 walkdir = "2"
 
 

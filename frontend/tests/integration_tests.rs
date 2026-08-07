@@ -33,7 +33,7 @@ async fn test_import_empty_directory() {
 async fn test_delete_nonexistent_intent() {
 	let app = TestApp::new().await;
 
-	let result = api::delete_intent(app.db(), "intent:does_not_exist").await;
+	let result = api::intent::delete_intent(app.db(), "intent:does_not_exist").await;
 
 	// Should not panic - may error or succeed (idempotent)
 	let _ = result;
@@ -95,21 +95,21 @@ async fn test_full_intent_lifecycle() {
 		..Default::default()
 	};
 
-	let intent_id = api::create_intent(app.db(), source_id.clone(), vec![dest_id], config)
+	let intent_id = api::intent::create_intent(app.db(), source_id.clone(), vec![dest_id], config)
 		.await
 		.expect("Should create intent");
 
-	let intents = api::list_intents(app.db())
+	let intents = api::intent::list_intents(app.db())
 		.await
 		.expect("Should list intents");
 	let found = intents.iter().find(|i| i.id.contains(&intent_id));
 	assert!(found.is_some(), "Created intent should be in list");
 
-	api::delete_intent(app.db(), &intent_id)
+	api::intent::delete_intent(app.db(), &intent_id)
 		.await
 		.expect("Should delete intent");
 
-	let intents = api::list_intents(app.db())
+	let intents = api::intent::list_intents(app.db())
 		.await
 		.expect("Should list intents");
 	let found = intents.iter().find(|i| i.id.contains(&intent_id));
@@ -178,13 +178,13 @@ async fn test_multiple_intents_same_source() {
 			..Default::default()
 		};
 
-		let id = api::create_intent(app.db(), source_id.clone(), vec![source_id.clone()], config)
+		let id = api::intent::create_intent(app.db(), source_id.clone(), vec![source_id.clone()], config)
 			.await
 			.expect("Should create intent");
 		intent_ids.push(id);
 	}
 
-	let intents = api::list_intents(app.db())
+	let intents = api::intent::list_intents(app.db())
 		.await
 		.expect("Should list intents");
 	for id in &intent_ids {
@@ -192,7 +192,7 @@ async fn test_multiple_intents_same_source() {
 	}
 
 	for id in intent_ids {
-		let _ = api::delete_intent(app.db(), &id).await;
+		let _ = api::intent::delete_intent(app.db(), &id).await;
 	}
 }
 
@@ -207,7 +207,7 @@ async fn test_remove_referenced_location() {
 		.expect("Should add source");
 
 	let config = api::IntentConfig::default();
-	let _intent_id = api::create_intent(app.db(), source_id.clone(), vec![source_id.clone()], config)
+	let _intent_id = api::intent::create_intent(app.db(), source_id.clone(), vec![source_id.clone()], config)
 		.await
 		.expect("Should create intent");
 

@@ -11,7 +11,7 @@ use tracing::{error, info, warn};
 use crate::{
 	config,
 	drive_config::{get_drive_by_name, DriveConfig, DriveType},
-	folder::Folder,
+	folder::{expand_tilde_path, Folder},
 	progress::{format_bytes, BackupProgress},
 	state::StateManager,
 };
@@ -60,7 +60,7 @@ pub async fn run_restore_with_progress(
 	}
 
 	// Sort by priority (descending) - restore critical stuff first
-	all_folders.sort_by(|a, b| b.priority.cmp(&a.priority));
+	all_folders.sort_by_key(|a| std::cmp::Reverse(a.priority));
 
 	// Initialize state manager
 	let state = StateManager::new(main_config.settings.state_file.map(|s| s.into()))?;
@@ -92,7 +92,7 @@ pub async fn run_restore_with_progress(
 		if let Some(f) = &filter {
 			println!("   Filter: {}", f);
 		}
-		println!("\nRun '{}' to see available backups.", style("nix-ders backup check").bold());
+		println!("\nRun '{}' to see available backups.", style("kip check").bold());
 		return Ok(());
 	}
 
@@ -100,31 +100,20 @@ pub async fn run_restore_with_progress(
 	let progress = progress.unwrap_or_else(|| BackupProgress::new(pending_folders.len()));
 	let total_folders = pending_folders.len();
 
+	// Describe the source drive from its own config rather than assuming a layout.
+	let source_root = get_drive_by_name(drives, from)
+		.map(|d| d.describe_root())
+		.unwrap_or_else(|_| format!("<no drive named '{}' in drives.toml>", from));
+
 	if dry_run {
 		println!("\n{}", style("🔍 RESTORE DRY-RUN PREVIEW").bold());
 		println!("{}", "=".repeat(60));
-		println!(
-			"Source: {} ({})",
-			from,
-			if from == "flash" {
-				"/Volumes/SOMETHING/mac_emergency_backup"
-			} else {
-				"ssh.anders.place:/mnt/usb2tb/mac_emergency_backup"
-			}
-		);
+		println!("Source: {} ({})", from, source_root);
 		println!("{}", "=".repeat(60));
 	} else {
 		println!("\n{}", style("🔄 STARTING RESTORE").bold());
 		println!("{}", "=".repeat(60));
-		println!(
-			"Source: {} ({})",
-			from,
-			if from == "flash" {
-				"/Volumes/SOMETHING/mac_emergency_backup"
-			} else {
-				"ssh.anders.place:/mnt/usb2tb/mac_emergency_backup"
-			}
-		);
+		println!("Source: {} ({})", from, source_root);
 		println!("Folders to restore: {}", total_folders);
 		println!("{}", "=".repeat(60));
 	}
@@ -146,7 +135,7 @@ pub async fn run_restore_with_progress(
 
 		if let Some(dest) = dest {
 			// Resolve drive configuration
-			let drive = match get_drive_by_name(&drives, &dest.drive) {
+			let drive = match get_drive_by_name(drives, &dest.drive) {
 				Ok(d) => d,
 				Err(e) => {
 					error!("Failed to resolve drive '{}': {}", dest.drive, e);
@@ -181,29 +170,34 @@ pub async fn run_restore_with_progress(
 				folder.source.display()
 			);
 
-			match drive.drive_type {
-				DriveType::Local => {
-					let full_path = drive.get_destination_path(&dest.path);
-					match restore_from_flash(folder, &full_path).await {
-						Ok(bytes) => {
-							info!("Restore complete: {} bytes", bytes);
-							println!(
-								"   {} Restored {} from {}",
-								style("✅").bold().green(),
-								format_bytes(bytes),
-								dest.drive
-							);
-						}
-						Err(e) => {
-							error!("Restore failed: {}", e);
-							println!("   {} Failed: {}", style("❌").bold().red(), e);
-						}
-					}
+			let full_path = match drive.get_destination_path(&dest.path) {
+				Ok(p) => p,
+				Err(e) => {
+					error!("Cannot resolve restore source on drive '{}': {}", dest.drive, e);
+					println!("   {} Skipping {}: {}", style("❌").bold().red(), dest.drive, e);
+					continue;
 				}
+			};
+
+			match drive.drive_type {
+				DriveType::Local => match restore_from_flash(folder, &full_path).await {
+					Ok(bytes) => {
+						info!("Restore complete: {} bytes", bytes);
+						println!(
+							"   {} Restored {} from {}",
+							style("✅").bold().green(),
+							format_bytes(bytes),
+							dest.drive
+						);
+					}
+					Err(e) => {
+						error!("Restore failed: {}", e);
+						println!("   {} Failed: {}", style("❌").bold().red(), e);
+					}
+				},
 				DriveType::Ssh => {
-					let full_path = drive.get_destination_path(&dest.path);
 					if dest.zip {
-						match restore_from_server_zipped(folder, &full_path, &drive, &main_config.server).await {
+						match restore_from_server_zipped(folder, &full_path, drive, &main_config.server).await {
 							Ok(bytes) => {
 								info!("Restore complete (zipped): {} bytes", bytes);
 								println!(
@@ -219,7 +213,7 @@ pub async fn run_restore_with_progress(
 							}
 						}
 					} else {
-						match restore_from_server_direct(folder, &full_path, &drive, &main_config.server).await {
+						match restore_from_server_direct(folder, &full_path, drive, &main_config.server).await {
 							Ok(bytes) => {
 								info!("Restore complete: {} bytes", bytes);
 								println!(
@@ -235,6 +229,10 @@ pub async fn run_restore_with_progress(
 							}
 						}
 					}
+				}
+				DriveType::Cloud => {
+					// Cloud restore not yet implemented - skip for now
+					println!("   {} Cloud restore not yet supported for {}", style("⚠️").yellow(), dest.drive);
 				}
 			}
 		}
@@ -266,7 +264,7 @@ async fn restore_from_flash(folder: &Folder, source_path: &str) -> Result<u64> {
 
 	// Build rsync command
 	let mut cmd = tokio::process::Command::new("rsync");
-	cmd.args(&["-av", "--progress", "--no-specials", "--no-devices"]);
+	cmd.args(["-av", "--progress", "--no-specials", "--no-devices"]);
 
 	// Add excludes (same as backup)
 	for exclude in &folder.excludes {
@@ -349,7 +347,7 @@ async fn restore_from_server_zipped(
 
 	// Extract tarball
 	let extract_output = StdCommand::new("tar")
-		.args(&[
+		.args([
 			"-xzf",
 			temp_tarball.to_str().unwrap(),
 			"-C",
@@ -460,7 +458,7 @@ fn build_ssh_command(drive: &DriveConfig, server_config: &crate::config::ServerC
 		.as_ref()
 		.or(server_config.identity_file.as_ref());
 
-	if let Some(ref key) = identity_file {
+	if let Some(key) = identity_file {
 		let expanded = expand_tilde_path(key);
 		ssh_cmd.push_str(&format!(" -i {}", expanded.display()));
 	}
@@ -478,15 +476,15 @@ fn build_ssh_command(drive: &DriveConfig, server_config: &crate::config::ServerC
 	ssh_cmd
 }
 
-/// Expand tilde in a path
-fn expand_tilde_path(path: &str) -> PathBuf {
-	if path.starts_with('~') {
-		if let Some(home) = dirs::home_dir() {
-			return home.join(path.trim_start_matches('~').trim_start_matches('/'));
-		}
-	}
-	PathBuf::from(path)
-}
+// /// Expand tilde in a path
+// fn expand_tilde_path(path: &str) -> PathBuf {
+// 	if path.starts_with('~') {
+// 		if let Some(home) = dirs::home_dir() {
+// 			return home.join(path.trim_start_matches('~').trim_start_matches('/'));
+// 		}
+// 	}
+// 	PathBuf::from(path)
+// }
 
 /// Parse rsync output to extract bytes transferred
 fn parse_rsync_output(output: &[u8]) -> u64 {

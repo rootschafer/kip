@@ -4,7 +4,7 @@
 //! Destinations reference drives by name (configured in drives.toml).
 //! This enforces that no source overlaps with another.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use serde::Deserialize;
@@ -128,14 +128,25 @@ impl Folder {
 }
 
 /// Expand tilde in paths
-pub fn expand_tilde(path: &PathBuf) -> PathBuf {
+pub fn expand_tilde(path: &Path) -> PathBuf {
 	let path_str = path.to_string_lossy();
 	if path_str.starts_with('~') {
 		if let Some(home) = dirs::home_dir() {
 			return home.join(path_str.trim_start_matches('~').trim_start_matches('/'));
 		}
 	}
-	path.clone()
+	path.to_path_buf()
+}
+
+
+/// Expand tilde in a path
+pub fn expand_tilde_path(path: &str) -> PathBuf {
+	if path.starts_with('~') {
+		if let Some(home) = dirs::home_dir() {
+			return home.join(path.trim_start_matches('~').trim_start_matches('/'));
+		}
+	}
+	PathBuf::from(path)
 }
 
 /// Validate that no source paths overlap (one contains another)
@@ -202,4 +213,42 @@ pub fn validate_drive_references(folders: &[Folder], drive_names: &[&str]) -> Re
 		}
 	}
 	Ok(())
+}
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	// #[test]
+	// fn test_expand_tilde_path() {
+	// 	let path = expand_tilde_path("~/.config/kip/drives.toml");
+	// 	assert_eq!(path.to_string_lossy(), "/Users/anders/.config/kip/drives.toml");
+	// }
+
+	#[test]
+	fn test_expand_tilde_path() {
+		// Test path with tilde
+		let home = dirs::home_dir().expect("Failed to get home dir");
+		let home_str = home.to_string_lossy();
+
+		let result = expand_tilde_path("~/test/path");
+
+		// Check that result contains the home directory
+		assert!(
+			result.to_string_lossy().contains(&*home_str),
+			"Result '{}' should contain home '{}'",
+			result.display(),
+			home_str
+		);
+		assert!(
+			result.ends_with("test/path"),
+			"Result '{}' should end with 'test/path'",
+			result.display()
+		);
+
+		// Test path without tilde
+		let result = expand_tilde_path("/absolute/path");
+		assert_eq!(result.to_string_lossy(), "/absolute/path");
+	}
 }

@@ -227,7 +227,7 @@ mod tests {
     <key>VolumeName</key>
     <string>SOMETHING</string>
     <key>MountPoint</key>
-    <string>/Volumes/SOMETHING</string>
+    <string>/Volumes/TestBackupDrive</string>
     <key>FilesystemType</key>
     <string>msdos</string>
     <key>TotalSize</key>
@@ -240,7 +240,7 @@ mod tests {
 		let info: DiskutilInfo = plist::from_bytes(xml).unwrap();
 		assert_eq!(info.volume_uuid.as_deref(), Some("C97B5B92-3557-307E-847C-FB0DCB4A8C2F"));
 		assert_eq!(info.volume_name.as_deref(), Some("SOMETHING"));
-		assert_eq!(info.mount_point.as_deref(), Some("/Volumes/SOMETHING"));
+		assert_eq!(info.mount_point.as_deref(), Some("/Volumes/TestBackupDrive"));
 		assert_eq!(info.filesystem_type.as_deref(), Some("msdos"));
 		assert_eq!(info.total_size, Some(122768752640));
 		assert_eq!(info.internal, Some(false));

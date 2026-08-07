@@ -1,10 +1,12 @@
 //! Location management API
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use daemon::DbHandle;
+use ulid::Ulid;
 
 use crate::api::{KipError, LocationId, LocationSummary, MachineKind, MachineSummary};
+
 
 /// Add a new location
 pub async fn add_location(
@@ -23,7 +25,7 @@ pub async fn add_location(
 		return Ok(existing);
 	}
 
-	let location_id = format!("location:{}", ulid::Ulid::new());
+	let location_id = format!("location:{}", Ulid::generate());
 
 	db.db
 		.query("CREATE location CONTENT { path: $path, label: $label, available: true }")
@@ -56,7 +58,7 @@ pub async fn list_locations(db: &DbHandle) -> Result<Vec<LocationSummary>, KipEr
 	for row in rows {
 		let id_obj = &row["id"];
 		let id = if let Some(id_str) = id_obj.as_str() {
-			id_str.split(':').last().unwrap_or(id_str).to_string()
+			id_str.split(':').next_back().unwrap_or(id_str).to_string()
 		} else if let Some(id_obj) = id_obj.as_object() {
 			id_obj
 				.get("key")
@@ -119,7 +121,7 @@ pub async fn remove_location(db: &DbHandle, location_id: &str) -> Result<(), Kip
 	Ok(())
 }
 
-async fn find_location_by_path(db: &DbHandle, path: &PathBuf) -> Result<Option<LocationId>, KipError> {
+async fn find_location_by_path(db: &DbHandle, path: &Path) -> Result<Option<LocationId>, KipError> {
 	let mut response = db
 		.db
 		.query("SELECT id, path FROM location WHERE path = $path LIMIT 1")
@@ -136,7 +138,7 @@ async fn find_location_by_path(db: &DbHandle, path: &PathBuf) -> Result<Option<L
 	if let Some(row) = row {
 		let id_obj = &row["id"];
 		let id = if let Some(id_str) = id_obj.as_str() {
-			id_str.split(':').last().unwrap_or(id_str).to_string()
+			id_str.split(':').next_back().unwrap_or(id_str).to_string()
 		} else if let Some(id_obj) = id_obj.as_object() {
 			id_obj
 				.get("key")

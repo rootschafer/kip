@@ -10,14 +10,21 @@ The primary UI is a **2D mapping graph**. Machines and drives are glass containe
 
 ## Design Docs (read before writing code)
 
+All live under `notes/the_design/`:
+
 1. `KIP_DESIGN_1.md` — Vision, core concepts, speed modes, principles
 2. `KIP_DESIGN_2_DATA_MODEL.md` — SurrealDB schema, entities, graph relationships
-3. `KIP_DESIGN_3_INTENT_LIFECYCLE.md` — State machine, triggers, concurrency
 4. `KIP_DESIGN_4_ARCHITECTURE.md` — Menu bar app, thread model, copy pipeline
-5. `KIP_DESIGN_5_ERROR_HANDLING.md` — Error classification, auto-resolve vs review
 6. `KIP_DESIGN_6_MVP.md` — Phased roadmap, module structure, build order, **what's done vs. planned**
 7. `KIP_DESIGN_7_MAPPING_GRAPH.md` — Graph UI, selection, grouping, Output node, status indicators
-8. `KIP_DESIGN_8_FILE_PICKER.md` — Custom file picker (column view, drag-to-workspace, persistent panes)
+
+Numbers 3 (intent lifecycle), 5 (error handling) and 8 (file picker) were planned
+but never written — don't go looking for them. The intent state machine is
+described in `KIP_DESIGN_6_MVP.md`; error-handling policy is the "Errors NEVER
+show in UI" rule below.
+
+Current workstreams and their handoffs are listed in
+`notes/the_design/START_HERE.md`.
 
 ## Decisions That Are Final
 
@@ -36,8 +43,8 @@ Do not revisit these:
 
 ## Tech Stack
 
-- Rust, Dioxus 0.7.3 desktop
-- SurrealDB 3.0.0-beta.3 embedded (`kv-surrealkv`, NOT rocksdb)
+- Rust, Dioxus 0.7 desktop
+- SurrealDB 3.0 embedded (`kv-surrealkv`, NOT rocksdb)
 - blake3 for hashing
 - notify crate for filesystem watching
 - DiskArbitration (macOS) for drive detection
@@ -45,12 +52,40 @@ Do not revisit these:
 
 ## Build & Run
 
+**The `frontend` crate (the Dioxus GUI) must be built with `dx`**, not cargo —
+the Dioxus CLI does asset bundling and platform setup that cargo alone misses:
+
 ```sh
-dx build    # build (NOT cargo build)
-dx serve --platform desktop   # run with hot reload (NOT cargo run)
+dx build                       # build the GUI
+dx serve --platform desktop    # run the GUI with hot reload
 ```
 
-**Never use `cargo build` or `cargo run`** — always use `dx build` / `dx serve`. Dioxus CLI does asset bundling and platform-specific setup that cargo alone misses.
+**Everything else is plain cargo.** The CLI, the daemon, and the library crates
+have no asset pipeline, and the test suite is ordinary `cargo test`:
+
+```sh
+cargo build -p cli             # the `kip` CLI
+cargo test --workspace         # full test suite
+cargo test -p kip-rsync        # one crate
+```
+
+Tests that need external services (an SSH host, a configured rclone remote) are
+marked `#[ignore]`; `cargo test` skips them and passes with no network. Run them
+deliberately with `-- --ignored` once the service exists.
+
+### In Docker
+
+`Dockerfile` builds the whole workspace and pre-fetches every crate, so the
+container runs with no network at all:
+
+```sh
+docker build -t kip-dev .
+docker run --rm --network none kip-dev              # runs cargo test --workspace
+docker run --rm -it --network none kip-dev bash     # poke around
+```
+
+`CARGO_NET_OFFLINE=true` is set in the image, so any accidental attempt to reach
+the network fails immediately instead of hanging.
 
 ## What AGENTS.md Is
 
@@ -70,10 +105,39 @@ dx serve --platform desktop   # run with hot reload (NOT cargo run)
 - Glassmorphic CSS throughout
 - Tracing-based logging to terminal + file
 
+### CLI (`cli/`, binary name `kip`)
+
+Separate from the GUI and further along for actual transfers:
+
+- TOML config in `~/.config/kip/` (`drives.toml` + `apps/*.toml`), overridable
+  with `$KIP_CONFIG_DIR`
+- Backup/restore over local drives and SSH, with state tracking for resume
+- Cloud destinations via rclone (`crates/kip-rclone`) — direct sync and
+  tar.gz-then-upload. **Known bug:** the per-destination path is ignored, so
+  every folder lands in the same remote root. See
+  `notes/the_design/NEXTCLOUD_MIRROR_HANDOFF.md`.
+- Cloud *restore* is a stub
+- `crates/kip-rsync` wraps rsync (local + SSH) with progress parsing
+
+Drive configuration is strict: a drive missing the fields that determine where
+data is written (`mount_point`, `host`/`user`/`path`, `rclone_remote`) is a hard
+error naming the file and key. Never reintroduce a fallback like `localhost` or
+a default user — a guessed destination sends a backup somewhere wrong and
+reports success.
+
 ## What to Build Next (priority order)
 
-1. ✅ **Custom file picker** — DONE. Column-view picker with persistent panes. See `dev_notes/FILE_PICKER_IMPLEMENTATION.md`.
-2. **Circular directory/group nodes** — Directories and groups render as circles. Click once = children orbit around. Click again = enter and show direct children. See `dev_notes/CIRCULAR_NODES_IMPLEMENTATION.md`.
+### CLI
+
+1. **Fix the cloud destination path bug** — per-destination paths are dropped;
+   see `notes/the_design/NEXTCLOUD_MIRROR_HANDOFF.md` Phase A.
+2. **Cloud mirror mode** — `mirror = true` on a destination. Same doc, Phase B.
+3. **Cloud restore** — currently a stub in `cli/src/restore.rs`.
+
+### GUI
+
+1. ✅ **Custom file picker** — DONE. Column-view picker with persistent panes.
+2. **Circular directory/group nodes** — Directories and groups render as circles. Click once = children orbit around. Click again = enter and show direct children. See `notes/plans/circular_nodes_implementation_plan.md` and `notes/CIRCULAR_NODES_PROGRESS.md`.
 3. **Grouping** — Select multiple nodes → group. Edge merging. Collapse/expand. See design doc 7.
 4. **Central Output node** — Circular merge point at center of workspace.
 5. **Per-node error badges** — Red/yellow circles at node top-left corners.

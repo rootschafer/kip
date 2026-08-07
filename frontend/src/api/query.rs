@@ -18,7 +18,7 @@ pub async fn status(db: &DbHandle) -> Result<StatusSummary, KipError> {
 
 /// Get transfer history
 pub async fn transfer_history(
-	db: &DbHandle,
+	_db: &DbHandle,
 	_intent_id: Option<&str>,
 	_limit: Option<u64>,
 ) -> Result<Vec<crate::api::TransferSummary>, KipError> {

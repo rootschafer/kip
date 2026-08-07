@@ -1,6 +1,17 @@
 # Kip Development: Getting Started
 
-**Date:** February 22, 2026
+**Date:** February 22, 2026 (updated 2026-06-30)
+
+---
+
+## Open workstreams
+
+Two threads are in flight; neither blocks the other.
+
+- **Cloud mirror mode** — back up directly into a cloud remote that mirrors the
+  local filesystem layout. Design is settled, implementation is partly done and
+  has a known bug. See `NEXTCLOUD_MIRROR_HANDOFF.md`.
+- **GUI interaction model** — see `NEXT_AGENT_HANDOFF.md`.
 
 ---
 
@@ -15,9 +26,10 @@
 ### For AI Agents
 
 **DO NOT start coding until you have:**
-1. Read `INTERACTION_MODEL.md` — Understand the interaction patterns
-2. Read `COMPREHENSIVE_DEVELOPMENT_PLAN.md` — Know what's implemented vs. planned
-3. Reviewed the code structure in `src/`
+1. Read the handoff for whichever workstream you're on (see "Open workstreams" above)
+2. Read `INTERACTION_MODEL.md` — how the UI is meant to behave
+3. Reviewed the relevant code: `cli/src/backup.rs`, `cli/src/folder.rs`, and
+   `crates/kip-rclone/` for the cloud path; `frontend/src/` for the GUI
 
 ---
 

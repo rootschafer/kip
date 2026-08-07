@@ -8,7 +8,7 @@
 
 use std::{
 	collections::HashSet,
-	path::PathBuf,
+	path::{Path, PathBuf},
 	process::Stdio,
 	sync::atomic::Ordering,
 	time::{SystemTime, UNIX_EPOCH},
@@ -23,7 +23,7 @@ use crate::{
 	config, disk_space,
 	drive_config::{get_drive_by_name, DriveConfig, DriveType},
 	error::BackupError,
-	folder::Folder,
+	folder::{expand_tilde_path, Folder},
 	progress::{format_bytes, BackupProgress},
 	safety,
 	state::StateManager,
@@ -35,10 +35,10 @@ use crate::{
 fn run_ssh_auth_check(drive: &DriveConfig, server_config: &crate::config::ServerConfig) -> Result<bool> {
 	let ssh_cmd = build_ssh_command_for_rsync(drive, server_config);
 
-	// Build the full SSH connection string with user@host
-	let user = drive.user.as_deref().unwrap_or("user");
-	let host = drive.host.as_deref().unwrap_or("localhost");
-	let target = format!("{}@{}", user, host);
+	// Build the full SSH connection string with user@host. Guessing here would
+	// mean authenticating against the wrong machine, so an unconfigured drive is
+	// an error the caller reports rather than a silent fallback.
+	let target = drive.ssh_target()?;
 
 	// Run a simple SSH command that will trigger auth but exit immediately
 	// Using "true" as the remote command - it does nothing and exits successfully
@@ -74,13 +74,27 @@ fn authenticate_drives(drives: &[DriveConfig], server_config: &crate::config::Se
 			continue;
 		}
 
-		println!("   🔐 Authenticating with {}...", drive.name);
-		if run_ssh_auth_check(drive, server_config)? {
-			println!("   {} Connected to {}", style("✅").green(), drive.name);
+		// Cloud drives go through rclone, which manages its own credentials.
+		if drive.is_cloud() {
 			authenticated.insert(drive.name.clone());
-		} else {
-			println!("   {} Failed to connect to {}", style("❌").red(), drive.name);
-			// Don't fail - just mark as not authenticated, individual backups will skip
+			continue;
+		}
+
+		println!("   🔐 Authenticating with {}...", drive.name);
+		// Don't fail the whole run - mark as not authenticated and let the
+		// per-folder loop skip this drive with a message.
+		match run_ssh_auth_check(drive, server_config) {
+			Ok(true) => {
+				println!("   {} Connected to {}", style("✅").green(), drive.name);
+				authenticated.insert(drive.name.clone());
+			}
+			Ok(false) => {
+				println!("   {} Failed to connect to {}", style("❌").red(), drive.name);
+			}
+			Err(e) => {
+				warn!("Cannot authenticate drive '{}': {}", drive.name, e);
+				println!("   {} Skipping {}: {}", style("❌").red(), drive.name, e);
+			}
 		}
 	}
 
@@ -140,7 +154,7 @@ pub async fn run_backup_with_progress(
 	}
 
 	// Sort by priority (descending)
-	all_folders.sort_by(|a, b| b.priority.cmp(&a.priority));
+	all_folders.sort_by_key(|a| std::cmp::Reverse(a.priority));
 
 	// Initialize state manager (JSON — legacy)
 	let mut state = StateManager::new(main_config.settings.state_file.map(|s| s.into()))?;
@@ -222,7 +236,7 @@ pub async fn run_backup_with_progress(
 
 	// Authenticate with all remote drives first
 	println!("\n🔐 Authenticating with remote drives...");
-	let authenticated_drives = authenticate_drives(&drives, server_config)?;
+	let authenticated_drives = authenticate_drives(drives, server_config)?;
 	println!();
 
 	// Create progress tracker if not provided
@@ -266,7 +280,7 @@ pub async fn run_backup_with_progress(
 		// Backup to each destination
 		for dest in &folder.destinations {
 			// Resolve drive name to configuration
-			let drive = match get_drive_by_name(&drives, &dest.drive) {
+			let drive = match get_drive_by_name(drives, &dest.drive) {
 				Ok(d) => d,
 				Err(e) => {
 					error!("Failed to resolve drive '{}': {}", dest.drive, e);
@@ -282,7 +296,14 @@ pub async fn run_backup_with_progress(
 			}
 
 			// Build full destination path
-			let full_dest = drive.get_destination_path(&dest.path);
+			let full_dest = match drive.get_destination_path(&dest.path) {
+				Ok(p) => p,
+				Err(e) => {
+					error!("Cannot resolve destination on drive '{}': {}", dest.drive, e);
+					println!("   {} Skipping {}: {}", style("⚠️").yellow(), dest.drive, e);
+					continue;
+				}
+			};
 
 			// Check available disk space for local destinations
 			if drive.drive_type == DriveType::Local {
@@ -336,7 +357,7 @@ pub async fn run_backup_with_progress(
 				DriveType::Ssh => {
 					if dest.zip {
 						match backup_to_server_zipped(
-							folder, &full_dest, &drive, server_config, verbose, pipe_rsync_stdout,
+							folder, &full_dest, drive, server_config, verbose, pipe_rsync_stdout,
 						)
 						.await
 						{
@@ -349,7 +370,7 @@ pub async fn run_backup_with_progress(
 						}
 					} else {
 						match backup_to_server_direct(
-							folder, &full_dest, &drive, server_config, verbose, pipe_rsync_stdout,
+							folder, &full_dest, drive, server_config, verbose, pipe_rsync_stdout,
 						)
 						.await
 						{
@@ -358,6 +379,30 @@ pub async fn run_backup_with_progress(
 								error!("Server backup to {} skipped: {}", dest.path, e);
 								println!("   {} Server backup skipped: {}", style("⚠️").yellow(), e);
 								continue; // Skip this destination, continue with others
+							}
+						}
+					}
+				}
+				DriveType::Cloud => {
+					// Use kip-rclone for cloud backups
+					if dest.zip {
+						// For cloud, we always zip first then upload
+						match backup_to_cloud_zipped(folder, &full_dest, drive, verbose).await {
+							Ok(bytes) => bytes,
+							Err(e) => {
+								error!("Cloud backup to {} skipped: {}", dest.path, e);
+								println!("   {} Cloud backup skipped: {}", style("⚠️").yellow(), e);
+								continue;
+							}
+						}
+					} else {
+						// Direct sync to cloud
+						match backup_to_cloud_direct(folder, &full_dest, drive, verbose).await {
+							Ok(bytes) => bytes,
+							Err(e) => {
+								error!("Cloud backup to {} skipped: {}", dest.path, e);
+								println!("   {} Cloud backup skipped: {}", style("⚠️").yellow(), e);
+								continue;
 							}
 						}
 					}
@@ -443,7 +488,7 @@ pub async fn dry_run_backup(filter: Option<String>, limit: Option<usize>) -> Res
 	}
 
 	// Sort by priority (descending)
-	all_folders.sort_by(|a, b| b.priority.cmp(&a.priority));
+	all_folders.sort_by_key(|a| std::cmp::Reverse(a.priority));
 
 	// Apply limit if specified
 	if let Some(l) = limit {
@@ -460,6 +505,7 @@ pub async fn dry_run_backup(filter: Option<String>, limit: Option<usize>) -> Res
 			match drive.drive_type {
 				DriveType::Local => "local",
 				DriveType::Ssh => "ssh",
+				DriveType::Cloud => "cloud",
 			}
 		);
 	}
@@ -532,7 +578,7 @@ pub async fn dry_run_backup(filter: Option<String>, limit: Option<usize>) -> Res
 
 	println!("\n{}", "=".repeat(60));
 	println!("This was a DRY-RUN. No files were modified.");
-	println!("Run 'backup-tool run backup' to execute the backup.");
+	println!("Run 'kip backup' to execute the backup.");
 
 	Ok(())
 }
@@ -585,7 +631,7 @@ async fn backup_to_flash(folder: &Folder, dest_path: &str, verbose: bool) -> Res
 
 	// Build rsync command
 	let mut cmd = tokio::process::Command::new("rsync");
-	cmd.args(&[
+	cmd.args([
 		"-a",            // archive mode
 		"--no-specials", // Skip special files (sockets, devices)
 	]);
@@ -655,135 +701,22 @@ async fn backup_to_flash(folder: &Folder, dest_path: &str, verbose: bool) -> Res
 
 /// Run rsync with a progress indicator
 ///
-/// Uses --progress to get real-time progress from rsync's stderr,
-/// displayed via a spinner. Works with both macOS BSD rsync and GNU rsync.
+/// Uses a simple spinner while rsync runs. Progress is shown by rsync's --progress flag directly.
 async fn run_rsync_with_progress(
 	mut cmd: tokio::process::Command,
 	source: &PathBuf,
-	src_path: &PathBuf,
-	dest_path: &PathBuf,
+	src_path: &Path,
+	dest_path: &Path,
 ) -> Result<u64> {
-	use tokio::{
-		io::{AsyncBufReadExt, BufReader},
-		select,
-	};
-
-	// Use --progress instead of --info=progress2 for macOS compatibility
+	// Use --progress for rsync's built-in progress
 	cmd.arg("--progress");
 
-	// Spawn the process
-	let mut child = cmd
-		.stdout(Stdio::piped())
-		.stderr(Stdio::piped())
-		.spawn()
-		.map_err(|e| BackupError::RsyncFailed {
-			source_path: src_path.display().to_string(),
-			dest_path: dest_path.display().to_string(),
-			error: e.to_string(),
-		})?;
-
-	let source_name = source
-		.file_name()
-		.and_then(|n| n.to_str())
-		.unwrap_or("files");
-
-	// Create spinner
-	let pb = ProgressBar::new_spinner();
-	pb.set_style(
-		ProgressStyle::default_spinner()
-			.template("{spinner:.green} [{elapsed}] {msg}")?
-			.tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
-	);
-	pb.set_message(format!("Syncing {}", source_name));
-	pb.enable_steady_tick(std::time::Duration::from_millis(100));
-
-	// Take stdout for reading progress
-	let stdout = child.stdout.take();
-	let mut last_progress = String::new();
-
-	// Use select! to wait for either stdout lines OR child completion
-	// This prevents hanging when rsync completes without producing progress output
-	if let Some(stdout) = stdout {
-		let mut reader = BufReader::new(stdout).lines();
-
-		loop {
-			select! {
-				line_result = reader.next_line() => {
-					match line_result {
-						Ok(Some(line)) => {
-							let trimmed = line.trim();
-							// --progress lines look like: "filename (100%)" or byte counts
-							// Just track that we're making progress
-							if !trimmed.is_empty() {
-								last_progress = trimmed.to_string();
-								pb.set_message(format!("{}: {}", source_name, trimmed));
-							}
-						}
-						Ok(None) | Err(_) => {
-							// EOF or error - stop reading
-							break;
-						}
-					}
-				}
-				status_result = child.wait() => {
-					// Child completed - stop waiting for stdout
-					let status = status_result.map_err(|e| BackupError::RsyncFailed {
-						source_path: src_path.display().to_string(),
-						dest_path: dest_path.display().to_string(),
-						error: e.to_string(),
-					})?;
-
-					pb.finish_and_clear();
-
-					if !status.success() {
-						// Try to get stderr for better error message
-						let error_msg = if let Some(mut stderr) = child.stderr {
-							use tokio::io::AsyncReadExt;
-							let mut buf = String::new();
-							stderr.read_to_string(&mut buf).await.ok();
-
-							// Check for out-of-space errors
-							if buf.contains("No space left on device") || buf.contains("ENOSPC") {
-								return Err(BackupError::InsufficientSpace {
-									dest_path: dest_path.display().to_string(),
-									required: "unknown".to_string(),
-									available: "0 B".to_string(),
-								}.into());
-							}
-
-							format!("rsync exited with {}: {}", status, buf)
-						} else {
-							format!("rsync exited with {}", status)
-						};
-
-						return Err(BackupError::RsyncFailed {
-							source_path: src_path.display().to_string(),
-							dest_path: dest_path.display().to_string(),
-							error: error_msg,
-						}.into());
-					}
-
-					// Parse bytes from last progress line or get directory size
-					let bytes = if !last_progress.is_empty() {
-						parse_rsync_progress_line(&last_progress)
-					} else {
-						get_directory_size(source)
-					};
-					println!("   {} Complete: {}", style("✅").green(), format_bytes(bytes));
-					return Ok(bytes);
-				}
-			}
-		}
-	}
-
-	// Fallback if no stdout was captured
-	let status = child.wait().await.map_err(|e| BackupError::RsyncFailed {
+	// Spawn the process and let rsync output directly to terminal
+	let status = cmd.status().await.map_err(|e| BackupError::RsyncFailed {
 		source_path: src_path.display().to_string(),
 		dest_path: dest_path.display().to_string(),
 		error: e.to_string(),
 	})?;
-
-	pb.finish_and_clear();
 
 	if !status.success() {
 		return Err(BackupError::RsyncFailed {
@@ -794,19 +727,9 @@ async fn run_rsync_with_progress(
 		.into());
 	}
 
+	// Get size after completion
 	let bytes = get_directory_size(source);
-	println!("   {} Complete: {}", style("✅").green(), format_bytes(bytes));
 	Ok(bytes)
-}
-
-/// Parse a --info=progress2 line to extract bytes transferred
-/// Format: "1,234,567 100%  1.23MB/s  0:00:01"
-fn parse_rsync_progress_line(line: &str) -> u64 {
-	line.split_whitespace()
-		.next()
-		.map(|s| s.replace(',', ""))
-		.and_then(|s| s.parse::<u64>().ok())
-		.unwrap_or(0)
 }
 
 /// Backup a folder to flash drive with zip (tar.gz)
@@ -835,7 +758,7 @@ async fn backup_to_flash_zipped(folder: &Folder, dest_path: &str, verbose: bool)
 		.file_name()
 		.and_then(|n| n.to_str())
 		.unwrap_or("files");
-	pb.set_message(format!("{}", source_name));
+	pb.set_message(source_name.to_string());
 	pb.enable_steady_tick(std::time::Duration::from_millis(80));
 
 	// Create tar.gz archive
@@ -890,7 +813,7 @@ pub fn get_directory_size(path: &PathBuf) -> u64 {
 fn has_running_rsync_for_folders(folders: &[&Folder]) -> bool {
 	use std::process::Command;
 
-	let output = match Command::new("ps").args(&["auxwww"]).output() {
+	let output = match Command::new("ps").args(["auxwww"]).output() {
 		Ok(o) => o,
 		Err(_) => return false,
 	};
@@ -903,11 +826,10 @@ fn has_running_rsync_for_folders(folders: &[&Folder]) -> bool {
 			if (line.contains(" rsync ") || line.starts_with("rsync "))
 				&& !line.contains("--server")
 				&& !line.contains("grep")
+				&& line.contains(&*source_str)
 			{
-				if line.contains(&*source_str) {
-					info!("rsync already running for {}", folder.source.display());
-					return true;
-				}
+				info!("rsync already running for {}", folder.source.display());
+				return true;
 			}
 		}
 	}
@@ -923,7 +845,7 @@ pub fn monitor_backups() -> Result<()> {
 	println!("{}", "=".repeat(70));
 
 	let output = Command::new("ps")
-		.args(&["auxwww"])
+		.args(["auxwww"])
 		.output()
 		.context("Failed to run ps command")?;
 
@@ -976,29 +898,47 @@ pub fn monitor_backups() -> Result<()> {
 
 	if rsync_count == 0 {
 		println!("\n{} No active backup operations", style("✅").bold().green());
-		println!("   Run 'nix-ders backup run backup' to start backing up");
+		println!("   Run 'kip backup' to start backing up");
 	} else {
 		println!("\n{} {} active rsync process(es)", style("🔄").bold().yellow(), rsync_count);
 	}
 
-	// Show disk space
-	println!("\n{}", style("💾 Flash Drive Status").bold());
-	println!("{}", "=".repeat(70));
+	// Show disk space for every configured local drive, rather than one hardcoded volume.
+	let local_drives: Vec<_> = config::load_drives()
+		.unwrap_or_default()
+		.into_iter()
+		.filter(|d| d.is_local())
+		.collect();
 
-	if let Ok(output) = Command::new("df")
-		.args(&["-h", "/Volumes/SOMETHING"])
-		.output()
-	{
-		let df_str = String::from_utf8_lossy(&output.stdout);
-		for line in df_str.lines().skip(1) {
-			let parts: Vec<&str> = line.split_whitespace().collect();
-			if parts.len() >= 5 {
-				println!(
-					"   Used: {} | Available: {} | {}",
-					style(parts[2]).cyan(),
-					style(parts[3]).green(),
-					style(parts[4]).yellow()
-				);
+	if !local_drives.is_empty() {
+		println!("\n{}", style("💾 Local Drive Status").bold());
+		println!("{}", "=".repeat(70));
+
+		for drive in &local_drives {
+			let Some(mount_point) = drive.mount_point.as_deref() else {
+				println!("   {}: {}", drive.name, style("no mount_point configured").yellow());
+				continue;
+			};
+
+			match Command::new("df").args(["-h", mount_point]).output() {
+				Ok(output) if output.status.success() => {
+					let df_str = String::from_utf8_lossy(&output.stdout);
+					for line in df_str.lines().skip(1) {
+						let parts: Vec<&str> = line.split_whitespace().collect();
+						if parts.len() >= 5 {
+							println!(
+								"   {}: Used {} | Available {} | {}",
+								style(&drive.name).bold(),
+								style(parts[2]).cyan(),
+								style(parts[3]).green(),
+								style(parts[4]).yellow()
+							);
+						}
+					}
+				}
+				_ => {
+					println!("   {}: {}", drive.name, style("not mounted").dim());
+				}
 			}
 		}
 	}
@@ -1069,9 +1009,8 @@ async fn backup_to_server_zipped(
 	let ssh_options = build_ssh_options(drive, server_config);
 
 	// Build user@host target for SSH commands
-	let user = drive.user.as_deref().unwrap_or("user");
-	let host = drive.host.as_deref().unwrap_or("localhost");
-	let target = format!("{}@{}", user, host);
+	let user = drive.ssh_user()?;
+	let target = drive.ssh_target()?;
 
 	// Create parent directory on server first
 	if let Some(parent_dir) = std::path::Path::new(dest_path).parent() {
@@ -1121,7 +1060,7 @@ async fn backup_to_server_zipped(
 	// dest_path is already in format user@host:/remote/path from get_destination_path()
 	// Use it directly with rsync -e for SSH transfer
 	let mut cmd = tokio::process::Command::new("rsync");
-	cmd.args(&["-avP", "--no-specials"])
+	cmd.args(["-avP", "--no-specials"])
 		.arg(format!("--timeout={}", idle_timeout))
 		.arg("--exclude=*.sock")
 		.arg("--exclude=agent*")
@@ -1207,9 +1146,7 @@ async fn backup_to_server_direct(
 	let ssh_options = build_ssh_options(drive, server_config);
 
 	// Build user@host target for SSH commands
-	let user = drive.user.as_deref().unwrap_or("user");
-	let host = drive.host.as_deref().unwrap_or("localhost");
-	let target = format!("{}@{}", user, host);
+	let target = drive.ssh_target()?;
 
 	// Create parent directory on server first
 	if let Some(parent_dir) = std::path::Path::new(dest_path).parent() {
@@ -1242,7 +1179,7 @@ async fn backup_to_server_direct(
 	// Build rsync command — use rsync's --timeout (idle timeout) instead of wrapping with `timeout`
 	let idle_timeout = drive.connect_timeout.unwrap_or(300);
 	let mut cmd = tokio::process::Command::new("rsync");
-	cmd.args(&["-avP", "--progress", "--no-specials"])
+	cmd.args(["-avP", "--progress", "--no-specials"])
 		.arg(format!("--timeout={}", idle_timeout))
 		.arg("--exclude=*.sock")
 		.arg("--exclude=agent*")
@@ -1322,7 +1259,7 @@ struct SshCredentials {
 fn load_cloudflare_credentials() -> Option<SshCredentials> {
 	use std::fs;
 
-	let cred_path = dirs::home_dir().map(|h| h.join(".config/backup-tool/secrets/cloudflare_creds.yaml"))?;
+	let cred_path = config::config_dir().join("secrets/cloudflare_creds.yaml");
 
 	if !cred_path.exists() {
 		return None;
@@ -1375,9 +1312,9 @@ fn build_ssh_command_for_rsync(drive: &DriveConfig, server_config: &crate::confi
 		.as_ref()
 		.or(server_config.identity_file.as_ref());
 
-	if let Some(ref key) = identity_file {
+	if let Some(key) = identity_file {
 		let expanded = expand_tilde_path(key);
-		ssh_cmd.push_str(&format!(" -i {}", expanded));
+		ssh_cmd.push_str(&format!(" -i {}", expanded.display()));
 	}
 
 	// Port - prefer drive config
@@ -1404,9 +1341,9 @@ fn build_ssh_options(drive: &DriveConfig, server_config: &crate::config::ServerC
 		.as_ref()
 		.or(server_config.identity_file.as_ref());
 
-	if let Some(ref key) = identity_file {
+	if let Some(key) = identity_file {
 		let expanded = expand_tilde_path(key);
-		options.push_str(&format!(" -i {}", expanded));
+		options.push_str(&format!(" -i {}", expanded.display()));
 	}
 
 	// Port - prefer drive config
@@ -1420,11 +1357,122 @@ fn build_ssh_options(drive: &DriveConfig, server_config: &crate::config::ServerC
 	options
 }
 
-/// Expand tilde in a path string (delegates to folder::expand_tilde)
-fn expand_tilde_path(path: &str) -> String {
-	crate::folder::expand_tilde(&std::path::PathBuf::from(path))
-		.to_string_lossy()
-		.to_string()
+// /// Expand tilde in a path string (delegates to folder::expand_tilde)
+// fn expand_tilde_path(path: &str) -> String {
+// 	crate::folder::expand_tilde(&std::path::PathBuf::from(path))
+// 		.to_string_lossy()
+// 		.to_string()
+// }
+
+/// Backup a folder to cloud storage with zip (tar.gz)
+async fn backup_to_cloud_zipped(folder: &Folder, dest_path: &str, drive: &DriveConfig, verbose: bool) -> Result<u64> {
+	use kip_rclone::{CloudDestination, Rclone};
+
+	// Create temp directory for zip file
+	let temp_dir = std::env::temp_dir().join("kip-cloud-backup");
+	std::fs::create_dir_all(&temp_dir)?;
+
+	let zip_name = folder
+		.source
+		.file_name()
+		.and_then(|s| s.to_str())
+		.unwrap_or("backup")
+		.replace(' ', "_");
+	let zip_name = format!("{}.tar.gz", zip_name);
+	let zip_path = temp_dir.join(&zip_name);
+
+	info!("Creating tar.gz: {}", zip_path.display());
+
+	// Create a spinner for zip creation
+	let pb = ProgressBar::new_spinner();
+	pb.set_style(
+		ProgressStyle::default_spinner()
+			.template("{spinner:.green} Creating archive: {msg}")?
+			.tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
+	);
+	let source_name = folder
+		.source
+		.file_name()
+		.and_then(|n| n.to_str())
+		.unwrap_or("files");
+	pb.set_message(source_name.to_string());
+	pb.enable_steady_tick(std::time::Duration::from_millis(80));
+
+	// Create tar.gz archive
+	let zip_result = zip::create_tar_gz(&folder.source, &zip_path, &folder.excludes);
+
+	pb.finish_and_clear();
+
+	zip_result.map_err(|e| BackupError::ArchiveCreationFailed {
+		source_path: folder.source.display().to_string(),
+		dest_path: zip_path.display().to_string(),
+		error: e.to_string(),
+	})?;
+
+	let zip_size = std::fs::metadata(&zip_path)
+		.map_err(|e| BackupError::CreateDestinationDir {
+			path: zip_path.display().to_string(),
+			reason: format!("Failed to get metadata: {}", e),
+		})?
+		.len();
+
+	info!("Zip created: {} bytes", zip_size);
+
+	// Parse cloud destination from drive config
+	let remote = drive.require_rclone_remote()?;
+	let rpath = drive.rclone_path.as_deref().unwrap_or("");
+	let cloud_dest = CloudDestination::generic(remote, rpath);
+
+	// Upload to cloud
+	info!("Uploading to cloud: {}", dest_path);
+	let mut rclone = Rclone::new();
+	if verbose {
+		rclone = rclone.with_verbose();
+	}
+
+	let stats = rclone
+		.copy(&zip_path, &cloud_dest, "")
+		.await
+		.map_err(|e| BackupError::RsyncFailed {
+			source_path: folder.source.display().to_string(),
+			dest_path: dest_path.to_string(),
+			error: format!("rclone failed: {}", e),
+		})?;
+
+	// Clean up temp zip
+	std::fs::remove_file(&zip_path).ok();
+
+	info!("Cloud backup complete: {} bytes", stats.bytes_transferred);
+	Ok(stats.bytes_transferred)
+}
+
+/// Backup a folder to cloud storage directly (sync)
+async fn backup_to_cloud_direct(folder: &Folder, dest_path: &str, drive: &DriveConfig, verbose: bool) -> Result<u64> {
+	use kip_rclone::{CloudDestination, Rclone};
+
+	// Parse cloud destination from drive config
+	let remote = drive.require_rclone_remote()?;
+	let rpath = drive.rclone_path.as_deref().unwrap_or("");
+	let cloud_dest = CloudDestination::generic(remote, rpath);
+
+	// Sync to cloud
+	info!("Syncing to cloud: {}", dest_path);
+	let mut rclone = Rclone::new();
+	if verbose {
+		rclone = rclone.with_verbose();
+	}
+
+	let stats = rclone
+		.sync(&folder.source, &cloud_dest, "")
+		.await
+		.map_err(|e| BackupError::RsyncFailed {
+			source_path: folder.source.display().to_string(),
+			dest_path: dest_path.to_string(),
+			error: format!("rclone failed: {}", e),
+		})?;
+
+	info!("Cloud sync complete: {} bytes", stats.bytes_transferred);
+	Ok(stats.bytes_transferred)
 }
 
 #[cfg(test)]
@@ -1487,27 +1535,6 @@ mod tests {
 		assert_eq!(bytes, 0);
 	}
 
-	#[test]
-	fn test_expand_tilde_path() {
-		// Test path with tilde
-		let home = dirs::home_dir().expect("Failed to get home dir");
-		let home_str = home.to_string_lossy();
-
-		let result = expand_tilde_path("~/test/path");
-
-		// Check that result contains the home directory
-		assert!(
-			result.contains(&*home_str),
-			"Result '{}' should contain home '{}'",
-			result,
-			home_str
-		);
-		assert!(result.ends_with("test/path"), "Result '{}' should end with 'test/path'", result);
-
-		// Test path without tilde
-		let result = expand_tilde_path("/absolute/path");
-		assert_eq!(result, "/absolute/path");
-	}
 
 	#[test]
 	fn test_backup_error_display() {

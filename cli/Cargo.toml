@@ -9,6 +9,8 @@ path = "src/main.rs"
 
 [dependencies]
 kip-core = { path = "../kip-core" }
+kip-rsync = { path = "../crates/kip-rsync" }
+kip-rclone = { path = "../crates/kip-rclone" }
 daemon = { path = "../daemon" }
 surrealdb = { workspace = true }
 surrealdb-types = { workspace = true }
@@ -24,13 +26,13 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 
 # CLI specific
-console = "0.15"
+console = "0.16"
 indicatif = "0.18"
 anyhow = "1.0"
 walkdir = { workspace = true }
 dirs = { workspace = true }
 glob = "0.3"
-sha2 = "0.10"
+sha2 = "0.11"
 parking_lot = "0.12"
 toml = { workspace = true }
 serde_yaml = "0.9"

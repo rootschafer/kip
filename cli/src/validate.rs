@@ -1,9 +1,6 @@
 //! Configuration validation - pure inspection, never modifies anything
 
-use std::{
-	io::{self, Write},
-	path::PathBuf,
-};
+use std::io::{self, Write};
 
 use anyhow::{Context, Result};
 use console::style;
@@ -11,7 +8,7 @@ use tracing::{info, warn};
 
 use crate::{
 	config,
-	folder::{self, Folder},
+	folder::{self, expand_tilde_path, Folder},
 	git_verify,
 };
 
@@ -197,7 +194,8 @@ fn handle_git_validation(result: &mut ValidationResult) -> Result<()> {
 
 	// Verify each repo
 	for repo_path_str in &config.repos {
-		let repo_path = crate::folder::expand_tilde(&PathBuf::from(repo_path_str));
+		// let repo_path = expand_tilde(&PathBuf::from(repo_path_str));
+		let repo_path = expand_tilde_path(repo_path_str);
 
 		match git_verify::verify_git_repo(&repo_path) {
 			Ok(verify_result) => {
@@ -287,15 +285,15 @@ fn handle_git_validation(result: &mut ValidationResult) -> Result<()> {
 	Ok(())
 }
 
-/// Expand tilde in path
-fn expand_tilde(path: &str) -> PathBuf {
-	if path.starts_with('~') {
-		if let Some(home) = dirs::home_dir() {
-			return home.join(path.trim_start_matches('~').trim_start_matches('/'));
-		}
-	}
-	PathBuf::from(path)
-}
+// /// Expand tilde in path
+// fn expand_tilde(path: &str) -> PathBuf {
+// 	if path.starts_with('~') {
+// 		if let Some(home) = dirs::home_dir() {
+// 			return home.join(path.trim_start_matches('~').trim_start_matches('/'));
+// 		}
+// 	}
+// 	PathBuf::from(path)
+// }
 
 /// Print validation summary
 fn print_validation_summary(result: &ValidationResult) {

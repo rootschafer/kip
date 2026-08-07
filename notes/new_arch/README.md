@@ -175,13 +175,13 @@ dx serve --platform desktop     # Run GUI
 ## Related Documentation
 
 ### In This Repo
-- `/Users/anders/kip/notes/the_design/` — Original Kip development plan
-- `/Users/anders/kip/AGENTS.md` — Technical reference and gotchas
-- `/Users/anders/kip/CLAUDE.md` — Project overview and decisions
+- `notes/the_design/` — Original Kip development plan
+- `AGENTS.md` — Technical reference and gotchas
+- `CLAUDE.md` — Project overview and decisions
 
 ### External
-- `/Users/anders/.dotfiles/nix-ders/backup-tool/` — Original backup-tool codebase
-- `/Users/anders/kip/external/nexus-node-sync/` — TypeScript/D3 reference implementation
+- `<external>/backup-tool/` — Original backup-tool codebase
+- `external/nexus-node-sync/` — TypeScript/D3 reference implementation
 
 ---
 

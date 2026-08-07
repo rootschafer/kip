@@ -24,7 +24,9 @@ pub fn MachineChip(container: ContainerView, on_click: EventHandler<ContainerVie
 			disabled: !connected,
 			onclick: move |_| on_click.call(container.clone()),
 			div { class: "chip-dot", style: "background: {color};" }
+			// div { class: "chip-dot", background: "{container.color}", }
 			span { class: "chip-name", "{name}" }
+			// span { class: "chip-name", "{container.name}" }
 			span { class: "chip-kind", "{kind_label}" }
 		}
 	}

@@ -1,7 +1,7 @@
 # Kip MVP Roadmap
 
 ## Guiding Principle
-Build the smallest thing that would have saved Anders 6 hours tonight.
+Build the smallest thing that would have saved 6 hours on the night that motivated this project.
 
 ---
 

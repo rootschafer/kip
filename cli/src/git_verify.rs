@@ -4,7 +4,10 @@
 //! - No uncommitted changes
 //! - All commits pushed to remote (optional)
 
-use std::{path::PathBuf, process::Command};
+use std::{
+	path::{Path, PathBuf},
+	process::Command,
+};
 
 use anyhow::{Context, Result};
 use console::style;
@@ -63,7 +66,7 @@ pub fn verify_git_repo(path: &PathBuf) -> Result<GitVerificationResult> {
 
 	// Check for uncommitted changes
 	let status_output = Command::new("git")
-		.args(&["status", "--porcelain"])
+		.args(["status", "--porcelain"])
 		.current_dir(path)
 		.output()
 		.context("Failed to run git status")?;
@@ -93,7 +96,7 @@ pub fn verify_git_repo(path: &PathBuf) -> Result<GitVerificationResult> {
 
 	// Check for unsynced commits
 	let has_remote_output = Command::new("git")
-		.args(&["remote"])
+		.args(["remote"])
 		.current_dir(path)
 		.output()
 		.map(|o| !o.stdout.is_empty())
@@ -103,13 +106,13 @@ pub fn verify_git_repo(path: &PathBuf) -> Result<GitVerificationResult> {
 
 	if has_remote_output {
 		let rev_list_output = Command::new("git")
-			.args(&["rev-list", "--left-right", "--count", "HEAD...@{u}"])
+			.args(["rev-list", "--left-right", "--count", "HEAD...@{u}"])
 			.current_dir(path)
 			.output();
 
 		if let Ok(output) = rev_list_output {
 			let counts = String::from_utf8_lossy(&output.stdout);
-			let parts: Vec<&str> = counts.trim().split_whitespace().collect();
+			let parts: Vec<&str> = counts.split_whitespace().collect();
 
 			if parts.len() == 2 {
 				result.commits_ahead = parts[0].parse().unwrap_or(0);
@@ -145,7 +148,7 @@ pub fn verify_git_repo(path: &PathBuf) -> Result<GitVerificationResult> {
 }
 
 /// Check if a path is a git repository
-pub fn is_git_repo(path: &PathBuf) -> bool {
+pub fn is_git_repo(path: &Path) -> bool {
 	path.join(".git").exists()
 }
 

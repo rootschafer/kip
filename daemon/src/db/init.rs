@@ -61,7 +61,7 @@ async fn run_migrations(db: &Surreal<Db>) -> Result<(), Box<dyn std::error::Erro
 async fn bootstrap_local_machine(db: &Surreal<Db>) -> Result<(), Box<dyn std::error::Error>> {
 	let hostname = get_hostname();
 	tracing::info!("Bootstrapping local machine with hostname: {}", hostname);
-	let mut resp = db
+	let resp = db
 		.query(
 			"UPSERT machine:local CONTENT {
             name: $name,

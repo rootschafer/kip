@@ -58,6 +58,14 @@ pub struct DriveConfig {
 	#[serde(default)]
 	pub port: Option<u16>,
 
+	/// For Cloud drives: rclone remote name (e.g., "gdrive", "nextcloud")
+	#[serde(default)]
+	pub rclone_remote: Option<String>,
+
+	/// For Cloud drives: path within the rclone remote
+	#[serde(default)]
+	pub rclone_path: Option<String>,
+
 	/// Check if drive is mounted before backup (for local drives)
 	#[serde(default = "default_check_mounted")]
 	pub check_mounted: bool,
@@ -75,26 +83,96 @@ pub enum DriveType {
 	Local,
 	/// Remote server via SSH
 	Ssh,
+	/// Cloud storage via rclone (Google Drive, Nextcloud, S3, etc.)
+	Cloud,
 }
 
 impl DriveConfig {
-	/// Get the full path for a destination on this drive
-	pub fn get_destination_path(&self, dest_path: &str) -> String {
-		match self.drive_type {
-			DriveType::Local => self
-				.mount_point
-				.as_ref()
-				.map(|m| format!("{}/{}", m, dest_path))
-				.unwrap_or_else(|| dest_path.to_string()),
+	/// Get the full path for a destination on this drive.
+	///
+	/// Every field consulted here identifies *where data gets written*, so a
+	/// missing one is a hard error rather than a guess. Silently falling back to
+	/// something like `user@localhost:/` would send a backup to the wrong place
+	/// and report success.
+	pub fn get_destination_path(&self, dest_path: &str) -> Result<String> {
+		Ok(match self.drive_type {
+			DriveType::Local => {
+				let mount = self.require("mount_point", self.mount_point.as_deref(), "the drive's mount point")?;
+				format!("{}/{}", mount.trim_end_matches('/'), dest_path)
+			}
 			DriveType::Ssh => {
-				let user = self.user.as_deref().unwrap_or("user");
-				let host = self.host.as_deref().unwrap_or("localhost");
-				let path = self.path.as_deref().unwrap_or("");
+				let user = self.require("user", self.user.as_deref(), "the SSH login name")?;
+				let host = self.require("host", self.host.as_deref(), "the server's hostname")?;
+				let path = self.require("path", self.path.as_deref(), "the backup root on the server")?;
 
 				// Don't include port in destination - it's handled by SSH -p flag
-				format!("{}@{}:{}/{}", user, host, path, dest_path)
+				format!("{}@{}:{}/{}", user, host, path.trim_end_matches('/'), dest_path)
 			}
+			DriveType::Cloud => {
+				let remote = self.require(
+					"rclone_remote",
+					self.rclone_remote.as_deref(),
+					"an rclone remote name (see `rclone listremotes`)",
+				)?;
+				let rpath = self.rclone_path.as_deref().unwrap_or("").trim_matches('/');
+				if rpath.is_empty() {
+					format!("{}:{}", remote, dest_path)
+				} else {
+					format!("{}:{}/{}", remote, rpath, dest_path)
+				}
+			}
+		})
+	}
+
+	/// The login name for connecting to this SSH drive.
+	pub fn ssh_user(&self) -> Result<&str> {
+		self.require("user", self.user.as_deref(), "the SSH login name")
+	}
+
+	/// The `user@host` string for connecting to this SSH drive.
+	pub fn ssh_target(&self) -> Result<String> {
+		let user = self.ssh_user()?;
+		let host = self.require("host", self.host.as_deref(), "the server's hostname")?;
+		Ok(format!("{}@{}", user, host))
+	}
+
+	/// The rclone remote name backing this cloud drive.
+	pub fn require_rclone_remote(&self) -> Result<&str> {
+		self.require(
+			"rclone_remote",
+			self.rclone_remote.as_deref(),
+			"an rclone remote name (see `rclone listremotes`)",
+		)
+	}
+
+	/// Human-readable description of this drive's backup root, for banners.
+	pub fn describe_root(&self) -> String {
+		match self.get_destination_path("") {
+			Ok(root) => root.trim_end_matches('/').to_string(),
+			Err(_) => format!("<{} drive '{}' is not fully configured>", self.type_name(), self.name),
 		}
+	}
+
+	/// The drive type as it appears in `drives.toml`.
+	pub fn type_name(&self) -> &'static str {
+		match self.drive_type {
+			DriveType::Local => "local",
+			DriveType::Ssh => "ssh",
+			DriveType::Cloud => "cloud",
+		}
+	}
+
+	/// Return `value`, or an error naming the drive and the missing key.
+	fn require<'a>(&self, field: &str, value: Option<&'a str>, expects: &str) -> Result<&'a str> {
+		value.filter(|v| !v.trim().is_empty()).ok_or_else(|| {
+			crate::error::BackupError::MissingConfigField {
+				field: field.to_string(),
+				config: format!("drives.toml [[drives]] name = \"{}\"", self.name),
+				context: format!("resolving the destination path for {} drive '{}'", self.type_name(), self.name),
+				hint: format!("Set `{}` on that drive to {}.", field, expects),
+			}
+			.into()
+		})
 	}
 
 	/// Check if this drive is a local drive
@@ -105,6 +183,11 @@ impl DriveConfig {
 	/// Check if this drive is an SSH drive
 	pub fn is_ssh(&self) -> bool {
 		matches!(self.drive_type, DriveType::Ssh)
+	}
+
+	/// Check if this drive is a cloud drive
+	pub fn is_cloud(&self) -> bool {
+		matches!(self.drive_type, DriveType::Cloud)
 	}
 }
 

@@ -1,0 +1,37 @@
+# Example drives.toml — backup destinations for kip.
+#
+# Copy to ~/.config/kip/drives.toml and replace every ALL_CAPS placeholder with
+# your own values. Nothing here has a default: kip refuses to run a backup
+# against a drive whose location fields are missing, rather than guessing a
+# destination and reporting success for a transfer that went somewhere else.
+
+# --- Local drive (USB stick, external HDD, mounted NAS share) ---------------
+[[drives]]
+name = "flash"
+type = "local"
+# Absolute path where the volume mounts. Required.
+mount_point = "/Volumes/MY_BACKUP_VOLUME"
+# Refuse to back up when the volume is not mounted, instead of silently
+# creating a directory at the mount point on the internal disk.
+check_mounted = true
+
+# --- Remote server over SSH -------------------------------------------------
+[[drives]]
+name = "server"
+type = "ssh"
+host = "MY_SERVER_HOSTNAME"      # required
+user = "MY_SSH_USERNAME"         # required
+path = "/srv/backups/kip"        # required — backup root on the server
+port = 22                        # optional, defaults to the SSH client default
+identity_file = "~/.ssh/MY_KEY"  # optional
+# proxy_command = "..."          # optional, e.g. for a bastion or tunnel
+
+# --- Cloud storage via rclone ----------------------------------------------
+# Configure the remote itself with `rclone config`, then reference it by name.
+# `rclone listremotes` shows what you have.
+[[drives]]
+name = "cloud"
+type = "cloud"
+rclone_remote = "MY_RCLONE_REMOTE"  # required — must match an rclone remote
+rclone_path = "backups/kip"         # optional — subpath within the remote
+check_mounted = false               # cloud remotes are always "mounted"

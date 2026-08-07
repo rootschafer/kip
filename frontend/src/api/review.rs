@@ -3,7 +3,7 @@
 use surrealdb_types::RecordId;
 use daemon::DbHandle;
 
-use crate::api::{KipError, Resolution, ReviewId, ReviewItem};
+use crate::api::{KipError, Resolution, ReviewItem};
 
 /// List all review items
 pub async fn list_review_items(db: &DbHandle) -> Result<Vec<ReviewItem>, KipError> {
@@ -121,7 +121,7 @@ pub async fn resolve_all_review(db: &DbHandle, intent_id: &str, resolution: Reso
 		if let Some(id_val) = row["id"].as_str() {
 			let review_id = id_val.to_string();
 			// Extract just the ID part after the table name
-			let review_id = review_id.split(':').last().unwrap_or(&review_id);
+			let review_id = review_id.split(':').next_back().unwrap_or(&review_id);
 			resolve_review(db, review_id, resolution.clone()).await?;
 		}
 	}

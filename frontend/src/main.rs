@@ -11,8 +11,8 @@ mod util;
 
 #[cfg(feature = "desktop")]
 use dioxus::prelude::*;
-#[cfg(feature = "desktop")]
-use daemon::DbHandle;
+// #[cfg(feature = "desktop")]
+// use daemon::DbHandle;
 
 #[cfg(feature = "desktop")]
 fn main() {

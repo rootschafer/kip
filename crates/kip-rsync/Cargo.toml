@@ -1,0 +1,32 @@
+[package]
+name = "kip-rsync"
+version = "0.1.0"
+edition = "2021"
+description = "Type-safe rsync CLI wrapper with progress tracking"
+
+[dependencies]
+# Async runtime
+tokio = { workspace = true, features = ["full"] }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Concurrency
+parking_lot = { workspace = true }
+futures = "0.3"
+
+# Optional dependencies for test utilities
+tempfile = { workspace = true, optional = true }
+
+[features]
+test-utils = ["tempfile"]
+
+[dev-dependencies]
+tempfile = { workspace = true }
+itertools = "0.15"
+kip-rsync = { path = ".", features = ["test-utils"] }
+testcontainers = "0.28"

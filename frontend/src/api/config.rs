@@ -1,6 +1,6 @@
 //! Config import/export API
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use daemon::DbHandle;
@@ -276,29 +276,41 @@ fn load_app_config(path: &PathBuf) -> Result<AppConfig, KipError> {
 	Ok(config)
 }
 
+/// Directory kip reads its configuration from.
+///
+/// Must stay in step with `cli::config::config_dir`: `$KIP_CONFIG_DIR` first,
+/// then `~/.config/kip`, then the pre-rename `~/.config/backup-tool`.
 fn default_backup_tool_config_dir() -> PathBuf {
-	#[cfg(target_os = "macos")]
-	{
-		if let Some(home) = dirs::home_dir() {
-			let config = home.join(".config").join("backup-tool");
-			if config.exists() {
-				return config;
-			}
-		}
+	if let Some(dir) = std::env::var_os("KIP_CONFIG_DIR") {
+		return PathBuf::from(dir);
 	}
 
-	dirs::config_dir()
-		.unwrap_or_else(|| PathBuf::from("."))
-		.join("backup-tool")
+	let base = dirs::home_dir()
+		.map(|home| home.join(".config"))
+		.or_else(dirs::config_dir)
+		.unwrap_or_else(|| PathBuf::from("."));
+
+	let current = base.join("kip");
+	if current.exists() {
+		return current;
+	}
+
+	let legacy = base.join("backup-tool");
+	if legacy.exists() {
+		return legacy;
+	}
+
+	current
 }
 
-fn expand_tilde(path: &PathBuf) -> PathBuf {
+fn expand_tilde(path: &Path) -> PathBuf {
 	if path.starts_with("~") {
 		let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
 		let mut result = home;
 		result.push(path.strip_prefix("~").unwrap_or(path));
 		result
 	} else {
-		path.clone()
+		// path.clone()
+		path.to_path_buf()
 	}
 }

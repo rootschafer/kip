@@ -6,7 +6,11 @@ use anyhow::{Context, Result};
 use console::style;
 use tracing::info;
 
-use crate::{config, folder::Folder, state::StateManager};
+use crate::{
+	config,
+	folder::{expand_tilde_path, Folder},
+	state::StateManager,
+};
 
 /// Check backup status without modifying anything
 pub async fn check_backup_status() -> Result<()> {
@@ -27,7 +31,7 @@ pub async fn check_backup_status() -> Result<()> {
 	}
 
 	// Sort by priority
-	all_folders.sort_by(|a, b| b.1.priority.cmp(&a.1.priority));
+	all_folders.sort_by_key(|a| std::cmp::Reverse(a.1.priority));
 
 	// Load state
 	let state = StateManager::new(main_config.settings.state_file.map(|s: String| s.into()))?;
@@ -147,7 +151,7 @@ pub async fn check_backup_status() -> Result<()> {
 
 			// Run rsync --dry-run --itemize-changes
 			let mut cmd = tokio::process::Command::new("rsync");
-			cmd.args(&[
+			cmd.args([
 				"-avn", // archive, verbose, dry-run
 				"--delete",
 			]);
@@ -197,24 +201,18 @@ pub async fn check_server_status() -> Result<()> {
 	let main_config = config::load_main_config().context("Failed to load main configuration")?;
 
 	let server_config = &main_config.server;
+	let server = server_config.resolve("checking backup status on the remote server")?;
 
 	println!("\n{}", style("🌐 Checking Server Status").bold());
 	println!("{}", "=".repeat(60));
-	println!(
-		"Server: {}@{}\n",
-		server_config.user.as_deref().unwrap_or("ders"),
-		server_config.host.as_deref().unwrap_or("ssh.anders.place")
-	);
+	println!("Server: {}@{}\n", server.user, server.host);
 
 	// Build SSH command
 	let ssh_opts = build_ssh_options(server_config);
 
 	let ls_cmd = format!(
 		"ssh {} {}@{} 'ls -lh {} 2>/dev/null | head -30'",
-		ssh_opts,
-		server_config.user.as_deref().unwrap_or("ders"),
-		server_config.host.as_deref().unwrap_or("ssh.anders.place"),
-		"/mnt/usb2tb/mac_emergency_backup"
+		ssh_opts, server.user, server.host, server.path
 	);
 
 	let mut cmd = tokio::process::Command::new("bash");
@@ -259,12 +257,12 @@ fn build_ssh_options(server_config: &crate::config::ServerConfig) -> String {
 	opts
 }
 
-/// Expand tilde in a path
-fn expand_tilde_path(path: &str) -> PathBuf {
-	if path.starts_with('~') {
-		if let Some(home) = dirs::home_dir() {
-			return home.join(path.trim_start_matches('~').trim_start_matches('/'));
-		}
-	}
-	PathBuf::from(path)
-}
+// /// Expand tilde in a path
+// fn expand_tilde_path(path: &str) -> PathBuf {
+// 	if path.starts_with('~') {
+// 		if let Some(home) = dirs::home_dir() {
+// 			return home.join(path.trim_start_matches('~').trim_start_matches('/'));
+// 		}
+// 	}
+// 	PathBuf::from(path)
+// }

@@ -10,10 +10,12 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
-/// Expand tilde in a path (delegates to folder::expand_tilde)
-fn expand_tilde_path(path: &PathBuf) -> PathBuf {
-	crate::folder::expand_tilde(path)
-}
+use crate::folder::expand_tilde;
+
+// /// Expand tilde in a path (delegates to folder::expand_tilde)
+// fn expand_tilde_path(path: &PathBuf) -> PathBuf {
+// 	crate::folder::expand_tilde(path)
+// }
 
 /// Old state file structure (for migration)
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -100,7 +102,7 @@ impl StateManager {
 	pub fn new(state_file: Option<PathBuf>) -> Result<Self> {
 		let state_file = if let Some(path) = state_file {
 			// Expand tilde if present
-			expand_tilde_path(&path)
+			expand_tilde(&path)
 		} else {
 			crate::config::config_dir().join("state.json")
 		};
@@ -126,7 +128,15 @@ impl StateManager {
 		// Try to load as old format and migrate
 		if let Ok(old_state) = serde_json::from_str::<OldState>(&content) {
 			info!("Migrating state file from old format to new format");
-			return Some(migrate_old_state(old_state));
+			// The old format stored absolute destination paths. Destination keys in
+			// the new format are relative to a drive root, so strip whichever
+			// configured local drive the old path lived under.
+			let drive_roots: Vec<String> = crate::config::load_drives()
+				.unwrap_or_default()
+				.into_iter()
+				.filter_map(|d| d.mount_point)
+				.collect();
+			return Some(migrate_old_state(old_state, &drive_roots));
 		}
 
 		// If both fail, return None to start fresh
@@ -217,8 +227,11 @@ impl StateManager {
 	}
 }
 
-/// Migrate old state format to new format
-fn migrate_old_state(old_state: OldState) -> State {
+/// Migrate old state format to new format.
+///
+/// `drive_roots` are the mount points of the configured local drives; old
+/// absolute destination paths are made relative to whichever one contains them.
+fn migrate_old_state(old_state: OldState, drive_roots: &[String]) -> State {
 	let mut new_state = State {
 		last_run: old_state.last_run,
 		folders: HashMap::new(),
@@ -230,11 +243,7 @@ fn migrate_old_state(old_state: OldState) -> State {
 		// Migrate flash destination if it exists
 		if !old_folder.dest_flash.is_empty() {
 			// Extract just the relative path from the full path
-			let flash_path = old_folder
-				.dest_flash
-				.strip_prefix("/Volumes/SOMETHING/mac_emergency_backup/")
-				.unwrap_or(&old_folder.dest_flash)
-				.to_string();
+			let flash_path = strip_drive_root(&old_folder.dest_flash, drive_roots);
 
 			destinations.insert(
 				flash_path,
@@ -264,6 +273,21 @@ fn migrate_old_state(old_state: OldState) -> State {
 	}
 
 	new_state
+}
+
+/// Make an absolute destination path relative to whichever configured drive root
+/// contains it. Returns the path unchanged if no root matches.
+fn strip_drive_root(path: &str, drive_roots: &[String]) -> String {
+	for root in drive_roots {
+		let root = root.trim_end_matches('/');
+		if root.is_empty() {
+			continue;
+		}
+		if let Some(rest) = path.strip_prefix(root) {
+			return rest.trim_start_matches('/').to_string();
+		}
+	}
+	path.to_string()
 }
 
 /// Backup statistics
@@ -300,7 +324,7 @@ mod tests {
 					"test:folder".to_string(),
 					OldFolderState {
 						source: "/Users/test/source".to_string(),
-						dest_flash: "/Volumes/SOMETHING/mac_emergency_backup/flash_dest".to_string(),
+						dest_flash: "/Volumes/TestBackupDrive/flash_dest".to_string(),
 						dest_server: "server_dest".to_string(),
 						flash_completed: true,
 						server_completed: false,
@@ -314,7 +338,7 @@ mod tests {
 			},
 		};
 
-		let new_state = migrate_old_state(old_state);
+		let new_state = migrate_old_state(old_state, &["/Volumes/TestBackupDrive".to_string()]);
 
 		assert_eq!(new_state.folders.len(), 1);
 		let folder = new_state.folders.get("test:folder").unwrap();
@@ -341,7 +365,7 @@ mod tests {
 					"test:folder".to_string(),
 					OldFolderState {
 						source: "/Users/test/source".to_string(),
-						dest_flash: "/Volumes/SOMETHING/mac_emergency_backup/only_flash".to_string(),
+						dest_flash: "/Volumes/TestBackupDrive/only_flash".to_string(),
 						dest_server: "".to_string(),
 						flash_completed: true,
 						server_completed: false,
@@ -355,7 +379,7 @@ mod tests {
 			},
 		};
 
-		let new_state = migrate_old_state(old_state);
+		let new_state = migrate_old_state(old_state, &["/Volumes/TestBackupDrive".to_string()]);
 
 		assert_eq!(new_state.folders.len(), 1);
 		let folder = new_state.folders.get("test:folder").unwrap();
@@ -409,7 +433,7 @@ mod tests {
 		let home = dirs::home_dir().expect("Failed to get home dir");
 		let path = PathBuf::from("~/test/path");
 
-		let result = expand_tilde_path(&path);
+		let result = expand_tilde(&path);
 
 		assert!(result.starts_with(&home));
 		assert!(result.ends_with("test/path"));
@@ -418,7 +442,7 @@ mod tests {
 	#[test]
 	fn test_expand_tilde_path_no_tilde() {
 		let path = PathBuf::from("/absolute/path");
-		let result = expand_tilde_path(&path);
+		let result = expand_tilde(&path);
 		assert_eq!(result, path);
 	}
 }

@@ -35,7 +35,7 @@ DONE: Imported PickerManager, got context in MappingGraph, replaced rfd picker w
 DONE: Added full glassmorphic picker styles at end of file.
 
 ### Step 5: Build and Test ✅
-DONE: `dx build` succeeds. App builds to `/Users/anders/kip/target/dx/kip/debug/macos/Kip.app`
+DONE: `dx build` succeeds. App builds to `target/dx/kip/debug/macos/Kip.app`
 
 ---
 

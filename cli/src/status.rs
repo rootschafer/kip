@@ -41,10 +41,7 @@ pub struct BackupStatus {
 
 impl BackupStatus {
 	pub fn status_file_path() -> PathBuf {
-		dirs::config_dir()
-			.unwrap_or_else(|| PathBuf::from("."))
-			.join("backup-tool")
-			.join("backup-status.json")
+		crate::config::config_dir().join("backup-status.json")
 	}
 
 	/// Load current status from file

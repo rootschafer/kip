@@ -34,7 +34,7 @@ impl Notification {
 	}
 }
 
-#[derive(Store, Clone, PartialEq)]
+#[derive(Default, Store, Clone, PartialEq)]
 pub struct NotificationService {
 	pub notifications: Vec<Notification>,
 	pub next_id: u32,
@@ -42,7 +42,8 @@ pub struct NotificationService {
 
 impl NotificationService {
 	pub fn new() -> Self {
-		Self { notifications: Vec::new(), next_id: 0 }
+		// Self { notifications: Vec::new(), next_id: 0 }
+		Self::default()
 	}
 }
 
@@ -160,18 +161,18 @@ pub fn NotificationLayer(mut notifs: Store<NotificationService>) -> Element {
 		div { class: "notification-stack",
 			for notif in active.iter().rev() {
 				{
-				    let id = notif.id;
-				    let level_class = match notif.level {
-				        NotificationLevel::Info => "notif-info",
-				        NotificationLevel::Warning => "notif-warning",
-				        NotificationLevel::Error => "notif-error",
-				        NotificationLevel::Progress => "notif-progress",
-				    };
-				    let msg = notif.message.clone();
-				    let progress = notif.progress;
-				    let spinner = notif.spinner;
+					let id = notif.id;
+					let level_class = match notif.level {
+						NotificationLevel::Info => "notif-info",
+						NotificationLevel::Warning => "notif-warning",
+						NotificationLevel::Error => "notif-error",
+						NotificationLevel::Progress => "notif-progress",
+					};
+					let msg = notif.message.clone();
+					let progress = notif.progress;
+					let spinner = notif.spinner;
 
-				    rsx! {
+					rsx! {
 
 
 
@@ -200,8 +201,8 @@ pub fn NotificationLayer(mut notifs: Store<NotificationService>) -> Element {
 						button {
 							class: "notif-close",
 							onclick: move |e: MouseEvent| {
-							    e.stop_propagation();
-							    notifs.dismiss(id);
+								e.stop_propagation();
+								notifs.dismiss(id);
 							},
 							"\u{2715}"
 						}

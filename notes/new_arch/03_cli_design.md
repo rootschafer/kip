@@ -598,7 +598,7 @@ All intents complete.
 ### Error Output Format
 
 ```
-❌ Error: Source path does not exist: /Users/anders/NonExistent
+❌ Error: Source path does not exist: ~/NonExistent
 
 Hint: Check that the path exists and is accessible.
 ```

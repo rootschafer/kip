@@ -2,6 +2,7 @@
 
 use chrono::Utc;
 use daemon::DbHandle;
+use ulid::Ulid;
 
 use crate::api::{KipError, LocationId, RunResult};
 
@@ -12,7 +13,7 @@ pub async fn create_intent(
 	destinations: Vec<LocationId>,
 	config: crate::api::IntentConfig,
 ) -> Result<LocationId, KipError> {
-	let intent_id = format!("intent:{}", ulid::Ulid::new());
+	let intent_id = format!("intent:{}", Ulid::generate());
 
 	db.db
         .query("CREATE intent CONTENT { source: $source, destinations: $destinations, status: 'idle', kind: 'backup', speed_mode: 'fast', priority: $priority, name: $name }")

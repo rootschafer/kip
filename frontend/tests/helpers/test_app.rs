@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! TestApp - In-memory database fixture for integration tests
 //!
 //! Each test gets its own isolated in-memory SurrealDB instance.
@@ -56,7 +57,7 @@ impl TestApp {
 	pub async fn create_test_intent(&self, source_id: String, dest_ids: Vec<String>, name: Option<String>) -> String {
 		let config = crate::api::IntentConfig { name, priority: 500, ..Default::default() };
 
-		crate::api::create_intent(&self.db, source_id, dest_ids, config)
+		crate::api::intent::create_intent(&self.db, source_id, dest_ids, config)
 			.await
 			.expect("Failed to create test intent")
 	}

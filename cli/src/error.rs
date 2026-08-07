@@ -50,10 +50,22 @@ pub enum BackupError {
 	)]
 	UnsafeOperation { summary: String },
 
-	#[error(
-		"Backup already in progress for some folders\n  Hint: Run 'nix-ders backup monitor' to see active backups"
-	)]
+	#[error("Backup already in progress for some folders\n  Hint: Run 'kip monitor' to see active backups")]
 	BackupInProgress,
+
+	#[error(
+		"Missing required configuration: {field}\n  Config: {config}\n  Context: {context}\n  Hint: {hint}"
+	)]
+	MissingConfigField {
+		/// The configuration key that has no value, e.g. `host`.
+		field: String,
+		/// Where the value was expected to come from, e.g. `drives.toml [[drives]] name = "server"`.
+		config: String,
+		/// What the tool was trying to do when it needed the value.
+		context: String,
+		/// How the user fixes it.
+		hint: String,
+	},
 
 	#[error("SSH transfer failed\n  Destination: {dest}\n  Error: {error}")]
 	SshTransferFailed { dest: String, error: String },

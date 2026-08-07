@@ -50,20 +50,50 @@ The primary UI is a **2D mapping graph**. Machines and drives appear as glass co
 
 ## Building
 
+The GUI needs the Dioxus CLI (`dx`) for asset bundling:
+
 ```sh
 dx build
 dx serve --platform desktop
 ```
 
+Everything else is plain cargo:
+
+```sh
+cargo build -p cli        # the `kip` command-line tool
+cargo test --workspace    # test suite
+```
+
+Tests requiring an external service (SSH host, configured rclone remote) are
+marked `#[ignore]`, so the default run needs no network. Run them with
+`cargo test --workspace -- --ignored` once those services exist.
+
+### Docker
+
+Builds the full workspace and vendors every dependency, so the container runs
+with no network:
+
+```sh
+docker build -t kip-dev .
+docker run --rm --network none kip-dev
+```
+
+## Configuration
+
+The CLI reads TOML from `~/.config/kip/` — `drives.toml` for destinations and
+`apps/*.toml` for what to back up. Set `$KIP_CONFIG_DIR` to point elsewhere.
+See `examples/drives-with-cloud.toml` for the shape of a drive config.
+
 ## Design Docs
 
-Detailed design documentation lives in `dev_notes/`:
+Detailed design documentation lives in `notes/the_design/`:
 
 1. `KIP_DESIGN_1.md` — Vision, core concepts, speed modes
 2. `KIP_DESIGN_2_DATA_MODEL.md` — SurrealDB schema, entities, graph relationships
-3. `KIP_DESIGN_3_INTENT_LIFECYCLE.md` — State machine, triggers, concurrency
 4. `KIP_DESIGN_4_ARCHITECTURE.md` — Menu bar app, thread model, copy pipeline
-5. `KIP_DESIGN_5_ERROR_HANDLING.md` — Error classification, auto-resolve vs review
 6. `KIP_DESIGN_6_MVP.md` — Phased roadmap, what's done vs. planned
 7. `KIP_DESIGN_7_MAPPING_GRAPH.md` — Graph UI, selection, grouping, node types
-8. `KIP_DESIGN_8_FILE_PICKER.md` — Custom file picker with drag-to-workspace
+
+(3, 5 and 8 were planned but never written.)
+
+`notes/the_design/START_HERE.md` lists the open workstreams.

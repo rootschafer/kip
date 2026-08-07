@@ -1,0 +1,19 @@
+# Build output — rebuilt inside the image, and a host target/ is the wrong
+# architecture anyway.
+target/
+**/target/
+
+# Version control and agent tooling
+.git/
+.github/
+.claude/
+
+# Nix files are for host development, not the container
+flake.nix
+flake.lock
+.direnv/
+
+# Editor / OS noise
+.DS_Store
+**/*.rs.bk
+*.log

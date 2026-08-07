@@ -37,8 +37,8 @@ pub fn DbErrorApp() -> Element {
 pub fn App() -> Element {
 	let db = use_context::<DbHandle>();
 	// let db = use_signal(|| DbHandle::new());
-	let picker = use_store(|| PickerManager::new());
-	let notifs = use_store(|| NotificationService::new());
+	let picker = use_store(PickerManager::new);
+	let notifs = use_store(NotificationService::new);
 	let mut hostname = use_signal(|| String::from("..."));
 	let mut refresh_tick = use_signal(|| 0u32);
 

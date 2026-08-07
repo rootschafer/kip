@@ -144,7 +144,7 @@ If a pane is open and unminimized, the tab bar doesn't appear.But the check `if 
 2. ✅ Lines 300-331: Fixed hidden files toggle to actually reload directory
 
 **Compilation**: ✅ Build succeeds
-**Build status**: `/Users/anders/kip/target/dx/kip/debug/macos/Kip.app`
+**Build status**: `target/dx/kip/debug/macos/Kip.app`
 
 **Deferred to future**:
 - Loading spinners

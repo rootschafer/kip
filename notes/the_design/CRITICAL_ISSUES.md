@@ -359,8 +359,8 @@ If clusters clump together:
    ```bash
    du -ah / | sort -rh | head -20
    ```
-2. **Delete target:** `rm -rf /Users/anders/kip/target`
-3. **Delete logs:** `rm -rf /Users/anders/kip/*.log`
+2. **Delete target:** `rm -rf target`
+3. **Delete logs:** `rm -rf *.log`
 4. **Empty trash**
 
 ---

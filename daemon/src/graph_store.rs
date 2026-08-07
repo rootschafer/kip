@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, fs};
 
 use surrealdb::types::{RecordId, RecordIdKey, SurrealValue};
 use tracing::{info, warn};
@@ -136,6 +136,12 @@ pub struct Graph {
 	pub viewport_scale: f64, // Zoom level (1.0 = 100%)
 	pub viewport_x: f64,     // Pan X offset
 	pub viewport_y: f64,     // Pan Y offset
+}
+
+impl Default for Graph {
+	fn default() -> Self {
+		Self::new()
+	}
 }
 
 impl Graph {
@@ -663,12 +669,14 @@ fn apply_forces(nodes: &mut [GraphNode], edges: &[GraphEdge], alpha: f64) {
 		if let Some(ref pid) = nodes[i].parent_id {
 			siblings_by_parent
 				.entry(pid.clone())
-				.or_insert_with(Vec::new)
+				// .or_insert_with(Vec::new)
+				.or_default()
 				.push(i);
 		}
 	}
 
-	for (_parent_id, siblings) in siblings_by_parent.iter() {
+	// for (_parent_id, siblings) in siblings_by_parent.iter() {
+	for siblings in siblings_by_parent.values() {
 		if siblings.len() < 2 {
 			continue;
 		}
@@ -1114,7 +1122,7 @@ pub async fn create_edge_in_db(db: &DbHandle, source_id: &str, dest_id: &str) ->
 	let (_, src_key) = source_id.split_once(':').ok_or("Invalid source ID")?;
 	let (_, dst_key) = dest_id.split_once(':').ok_or("Invalid dest ID")?;
 
-	let mut resp = db
+	let resp = db
 		.db
 		.query(
 			"LET $src = type::record('location', $src_key);
@@ -1207,8 +1215,6 @@ pub async fn scan_directory(
 	parent_x: f64,
 	parent_y: f64,
 ) -> Result<Vec<GraphNode>, String> {
-	use std::{f64::consts::PI, fs};
-
 	let path = std::path::Path::new(parent_path);
 	if !path.exists() {
 		tracing::warn!("scan_directory: path does not exist: {}", parent_path);

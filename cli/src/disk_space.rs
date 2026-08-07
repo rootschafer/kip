@@ -27,7 +27,8 @@ pub fn get_available_space(path: &Path) -> Result<u64> {
 
 		// f_bavail = free blocks available to non-super user
 		// f_bsize = fundamental filesystem block size
-		let available = unsafe { stat.f_bavail as u64 * stat.f_bsize as u64 };
+		// let available = unsafe { stat.f_bavail as u64 * stat.f_bsize as u64 };
+		let available = stat.f_bavail as u64 * stat.f_bsize as u64;
 
 		Ok(available)
 	}

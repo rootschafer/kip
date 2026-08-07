@@ -75,9 +75,9 @@ The "+" panel also has an **"+ Add remote machine"** option at the bottom (below
 
 When multiple nodes exist within the same container, Kip detects hierarchical relationships:
 
-- `/Users/anders/projects` **contains** `/Users/anders/projects/kip`
-- `/Users/anders/projects/kip` **contains** `/Users/anders/projects/kip/src`
-- `/Users/anders/projects` does **NOT** contain `/Users/anders/projects-old` (trailing-slash normalization prevents false prefix matches)
+- `~/projects` **contains** `~/projects/kip`
+- `~/projects/kip` **contains** `~/projects/kip/src`
+- `~/projects` does **NOT** contain `~/projects-old` (trailing-slash normalization prevents false prefix matches)
 
 **Visual treatment**:
 - Contained nodes are indented (12px per depth level) within their container
@@ -319,7 +319,7 @@ At larger scale (5+ machines, 20+ nodes): transitions to force-directed layout w
 - **Same-machine attraction**: Same-color nodes attract each other
 - **Repulsion**: Unconnected clusters spread apart
 
-**Path similarity seeding**: New nodes are placed near existing nodes with similar paths. `/Users/anders/projects/web` appears next to `/Users/anders/projects/api`.
+**Path similarity seeding**: New nodes are placed near existing nodes with similar paths. `~/projects/web` appears next to `~/projects/api`.
 
 **User overrides**: Users can drag any node or container. Pinned positions are respected — the force algorithm works around them.
 

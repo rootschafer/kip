@@ -15,10 +15,7 @@ const LOCK_FILE_NAME: &str = "kip-backup.lock";
 
 /// Get the lock file path
 fn get_lock_file_path() -> PathBuf {
-	dirs::config_dir()
-		.unwrap_or_else(|| PathBuf::from("."))
-		.join("backup-tool")
-		.join(LOCK_FILE_NAME)
+	crate::config::config_dir().join(LOCK_FILE_NAME)
 }
 
 /// Try to acquire the daemon lock

@@ -62,7 +62,7 @@ fn add_git_ignored_to_tar<W: std::io::Write>(
 ) -> Result<()> {
 	// Get list of ignored files from git
 	let git_ls_output = Command::new("git")
-		.args(&["ls-files", "--others", "--ignored", "--exclude-standard", "-z"])
+		.args(["ls-files", "--others", "--ignored", "--exclude-standard", "-z"])
 		.current_dir(path)
 		.output()
 		.context("Failed to run git ls-files")?;

@@ -16,9 +16,9 @@ A computer or server Kip knows about.
 
 ```surql
 DEFINE TABLE machine SCHEMAFULL;
-DEFINE FIELD name ON machine TYPE string;            -- "MacBook", "derver"
+DEFINE FIELD name ON machine TYPE string;            -- "MacBook", "backup-server"
 DEFINE FIELD kind ON machine TYPE string;            -- "local", "remote"
-DEFINE FIELD hostname ON machine TYPE option<string>; -- for remote: "ssh.anders.place"
+DEFINE FIELD hostname ON machine TYPE option<string>; -- for remote: "backup.example.internal"
 DEFINE FIELD is_current ON machine TYPE bool;         -- is this the machine Kip is running on?
 DEFINE FIELD ssh_user ON machine TYPE option<string>;
 DEFINE FIELD ssh_key_path ON machine TYPE option<string>;
@@ -51,7 +51,7 @@ The fundamental building block. Always: *something* + *path*.
 DEFINE TABLE location SCHEMAFULL;
 DEFINE FIELD machine ON location TYPE option<record<machine>>;  -- one of these
 DEFINE FIELD drive ON location TYPE option<record<drive>>;      -- must be set
-DEFINE FIELD path ON location TYPE string;                      -- "/Users/anders/projects"
+DEFINE FIELD path ON location TYPE string;                      -- "~/projects"
 DEFINE FIELD label ON location TYPE option<string>;             -- user-friendly: "My Projects"
 DEFINE FIELD created_at ON location TYPE datetime;
 

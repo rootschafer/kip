@@ -64,7 +64,7 @@ async fn test_create_intent_basic() {
 		.expect("Add source");
 
 	let config = api::IntentConfig::default();
-	let result = api::create_intent(app.db(), source_id.clone(), vec![source_id], config).await;
+	let result = api::intent::create_intent(app.db(), source_id.clone(), vec![source_id], config).await;
 
 	assert!(result.is_ok(), "Should create intent: {:?}", result.err());
 	let intent_id = result.unwrap();
@@ -85,11 +85,11 @@ async fn test_delete_intent() {
 		.expect("Add source");
 
 	let config = api::IntentConfig::default();
-	let intent_result = api::create_intent(app.db(), source_id.clone(), vec![source_id.clone()], config).await;
+	let intent_result = api::intent::create_intent(app.db(), source_id.clone(), vec![source_id.clone()], config).await;
 	assert!(intent_result.is_ok(), "Should create intent: {:?}", intent_result.err());
 
 	let intent_id = intent_result.unwrap();
-	let delete_result = api::delete_intent(app.db(), &intent_id).await;
+	let delete_result = api::intent::delete_intent(app.db(), &intent_id).await;
 
 	assert!(delete_result.is_ok(), "Should delete intent: {:?}", delete_result.err());
 }
@@ -98,7 +98,7 @@ async fn test_delete_intent() {
 async fn test_list_intents() {
 	let app = TestApp::new().await;
 
-	let intents = api::list_intents(app.db()).await;
+	let intents = api::intent::list_intents(app.db()).await;
 
 	assert!(intents.is_ok(), "list_intents should not error: {:?}", intents.err());
 }

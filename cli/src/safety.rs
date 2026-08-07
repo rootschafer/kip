@@ -72,7 +72,7 @@ pub fn validate_backup_source(source: &Path) -> Result<()> {
 /// Run rsync in dry-run mode to preview changes
 pub fn rsync_dry_run(source: &Path, dest: &Path, excludes: &[String]) -> Result<DryRunResult> {
 	let mut cmd = Command::new("rsync");
-	cmd.args(&[
+	cmd.args([
 		"-avn", // archive, verbose, dry-run
 		"--delete", "--no-specials", "--no-devices",
 	]);
