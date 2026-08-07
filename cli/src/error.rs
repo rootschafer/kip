@@ -53,9 +53,7 @@ pub enum BackupError {
 	#[error("Backup already in progress for some folders\n  Hint: Run 'kip monitor' to see active backups")]
 	BackupInProgress,
 
-	#[error(
-		"Missing required configuration: {field}\n  Config: {config}\n  Context: {context}\n  Hint: {hint}"
-	)]
+	#[error("Missing required configuration: {field}\n  Config: {config}\n  Context: {context}\n  Hint: {hint}")]
 	MissingConfigField {
 		/// The configuration key that has no value, e.g. `host`.
 		field: String,

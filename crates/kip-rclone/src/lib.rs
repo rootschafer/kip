@@ -32,9 +32,7 @@ pub mod rclone;
 pub mod stats;
 
 // Re-export main types
-pub use destination::{
-    CloudDestination, CloudProvider, GoogleDriveConfig, NextcloudConfig, S3Config, WebDAVConfig,
-};
+pub use destination::{CloudDestination, CloudProvider, GoogleDriveConfig, NextcloudConfig, S3Config, WebDAVConfig};
 pub use error::{CloudError, Result};
 pub use rclone::Rclone;
 pub use stats::CloudStats;

@@ -101,11 +101,7 @@ impl Destination {
 	}
 
 	/// Create an SSH destination
-	pub fn ssh<P: Into<PathBuf>>(
-		host: impl Into<String>,
-		user: impl Into<String>,
-		path: P,
-	) -> Self {
+	pub fn ssh<P: Into<PathBuf>>(host: impl Into<String>, user: impl Into<String>, path: P) -> Self {
 		Self::Ssh {
 			host: host.into(),
 			user: user.into(),
@@ -173,9 +169,9 @@ impl Destination {
 	pub fn parent_path(&self) -> Option<String> {
 		match self {
 			Self::Local(path) => path.parent().map(|p| p.display().to_string()),
-			Self::Ssh { user, host, path, .. } => {
-				path.parent().map(|p| format!("{}@{}:{}", user, host, p.display()))
-			}
+			Self::Ssh { user, host, path, .. } => path
+				.parent()
+				.map(|p| format!("{}@{}:{}", user, host, p.display())),
 		}
 	}
 }

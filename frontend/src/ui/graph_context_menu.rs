@@ -50,7 +50,7 @@ pub fn GraphNodeContextMenu(props: GraphNodeContextMenuProps) -> Element {
 		div {
 			class: "context-menu-overlay",
 			onclick: move |_| {
-			    graph.with_mut(|g| g.context_menu.hide());
+				graph.with_mut(|g| g.context_menu.hide());
 			},
 			div {
 				class: "graph-context-menu",
@@ -68,14 +68,14 @@ pub fn GraphNodeContextMenu(props: GraphNodeContextMenuProps) -> Element {
 						button {
 							class: "context-menu-item",
 							onclick: move |_| {
-							    if let Some(ref id) = expand_node_id {
-							        let id_clone = id.clone();
-							        graph
-							            .with_mut(|g| {
-							                g.toggle_expand(&id_clone);
-							                g.context_menu.hide();
-							            });
-							    }
+								if let Some(ref id) = expand_node_id {
+									let id_clone = id.clone();
+									graph
+										.with_mut(|g| {
+											g.toggle_expand(&id_clone);
+											g.context_menu.hide();
+										});
+								}
 							},
 							span {
 								if is_expanded {
@@ -97,14 +97,14 @@ pub fn GraphNodeContextMenu(props: GraphNodeContextMenuProps) -> Element {
 					button {
 						class: "context-menu-item",
 						onclick: move |_| {
-						    if let Some(ref id) = select_node_id {
-						        let id_clone = id.clone();
-						        graph
-						            .with_mut(|g| {
-						                g.toggle_select(&id_clone);
-						                g.context_menu.hide();
-						            });
-						    }
+							if let Some(ref id) = select_node_id {
+								let id_clone = id.clone();
+								graph
+									.with_mut(|g| {
+										g.toggle_select(&id_clone);
+										g.context_menu.hide();
+									});
+							}
 						},
 						span { "📋" }
 						span {
@@ -119,26 +119,26 @@ pub fn GraphNodeContextMenu(props: GraphNodeContextMenuProps) -> Element {
 					button {
 						class: "context-menu-item",
 						onclick: move |_| {
-						    if let Some(ref id) = sync_node_id {
-						        let id_clone = id.clone();
-						        graph
-						            .with_mut(|g| {
-						                g.drag_state = daemon::DragState::CreatingEdge {
-						                    source_id: id_clone.clone(),
-						                    source_x: g
-						                        .find_node(&id_clone)
-						                        .map(|n| n.center_x())
-						                        .unwrap_or(0.0),
-						                    source_y: g
-						                        .find_node(&id_clone)
-						                        .map(|n| n.center_y())
-						                        .unwrap_or(0.0),
-						                    mouse_x: menu_x,
-						                    mouse_y: menu_y,
-						                };
-						                g.context_menu.hide();
-						            });
-						    }
+							if let Some(ref id) = sync_node_id {
+								let id_clone = id.clone();
+								graph
+									.with_mut(|g| {
+										g.drag_state = daemon::DragState::CreatingEdge {
+											source_id: id_clone.clone(),
+											source_x: g
+												.find_node(&id_clone)
+												.map(|n| n.center_x())
+												.unwrap_or(0.0),
+											source_y: g
+												.find_node(&id_clone)
+												.map(|n| n.center_y())
+												.unwrap_or(0.0),
+											mouse_x: menu_x,
+											mouse_y: menu_y,
+										};
+										g.context_menu.hide();
+									});
+							}
 						},
 						span { "🔗" }
 						span { "Create Sync..." }
@@ -149,7 +149,7 @@ pub fn GraphNodeContextMenu(props: GraphNodeContextMenuProps) -> Element {
 					button {
 						class: "context-menu-item",
 						onclick: move |_| {
-						    graph.with_mut(|g| g.context_menu.hide());
+							graph.with_mut(|g| g.context_menu.hide());
 						},
 						span { "✕" }
 						span { "Cancel" }

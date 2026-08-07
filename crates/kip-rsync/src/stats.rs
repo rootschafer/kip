@@ -32,7 +32,7 @@ impl RsyncStats {
 		self.files_transferred += other.files_transferred;
 		self.files_updated += other.files_updated;
 		self.files_deleted += other.files_deleted;
-		
+
 		// For duration and speed, we'd need more sophisticated merging
 		// For now, just take the max
 		if other.duration > self.duration {
@@ -112,7 +112,7 @@ impl RsyncStats {
 }
 
 /// Parse rsync --stats output
-/// 
+///
 /// Example rsync stats output (macOS/BSD rsync):
 /// ```text
 /// Number of files: 42
@@ -122,7 +122,7 @@ impl RsyncStats {
 /// sent 2496 bytes  received 272 bytes  542745 bytes/sec
 /// total size is 52836488  speedup is 19088.32
 /// ```
-/// 
+///
 /// Example rsync stats output (GNU rsync):
 /// ```text
 /// Number of files: 100 (reg: 80, dir: 20)
@@ -137,7 +137,8 @@ pub fn parse_stats_output(output: &str) -> RsyncStats {
 		let line = line.trim();
 
 		// Parse "Number of files transferred: 9" (macOS) or "Number of regular files transferred: 80" (GNU)
-		if line.starts_with("Number of files transferred:") || line.starts_with("Number of regular files transferred:") {
+		if line.starts_with("Number of files transferred:") || line.starts_with("Number of regular files transferred:")
+		{
 			if let Some(num) = parse_count(line) {
 				stats.files_transferred = num;
 			}

@@ -18,14 +18,14 @@
 //!     .run()
 //!     .await?;
 //!
-//! println!("Backed up {} in {:?}", 
+//! println!("Backed up {} in {:?}",
 //!     RsyncStats::format_bytes(stats.bytes_transferred),
 //!     stats.duration);
 //!
 //! // SSH backup with progress
 //! let tracker = ProgressTracker::new()
 //!     .with_callback(|stats| {
-//!         println!("Progress: {:.1}% - {}", stats.percent, 
+//!         println!("Progress: {:.1}% - {}", stats.percent,
 //!             RsyncStats::format_bytes(stats.bytes_transferred));
 //!     });
 //!
@@ -51,14 +51,14 @@ pub mod stats;
 
 // Test utilities - exposed for integration tests
 #[cfg(any(test, feature = "test-utils"))]
-pub mod test_utils;
-#[cfg(any(test, feature = "test-utils"))]
 pub mod test_fixture;
+#[cfg(any(test, feature = "test-utils"))]
+pub mod test_utils;
 
 // Re-export main types
 pub use destination::{Destination, SshOptions};
 pub use error::{Result, RsyncError};
-pub use executor::{Rsync, ssh_mkdir};
+pub use executor::{ssh_mkdir, Rsync};
 pub use platform::Platform;
 pub use progress::{ProgressCallback, ProgressStats, ProgressTracker};
 pub use stats::RsyncStats;
@@ -66,18 +66,13 @@ pub use stats::RsyncStats;
 /// Parallel execution utilities
 pub mod parallel {
 	use futures::stream::{self, StreamExt};
-	
-	use crate::error::Result;
-	use crate::stats::RsyncStats;
-	use crate::executor::Rsync;
+
+	use crate::{error::Result, executor::Rsync, stats::RsyncStats};
 
 	/// Execute multiple rsync operations in parallel
-	/// 
+	///
 	/// Groups operations by destination to avoid race conditions
-	pub async fn run_parallel(
-		tasks: Vec<Rsync>,
-		max_concurrent: usize,
-	) -> Result<Vec<RsyncStats>> {
+	pub async fn run_parallel(tasks: Vec<Rsync>, max_concurrent: usize) -> Result<Vec<RsyncStats>> {
 		// Group by destination type to avoid conflicts
 		// (simplified - in production would group by exact destination)
 		let mut local_tasks = Vec::new();

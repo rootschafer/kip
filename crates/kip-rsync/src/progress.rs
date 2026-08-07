@@ -1,7 +1,7 @@
 //! Progress tracking for rsync operations
 
 use std::sync::{
-	atomic::{AtomicU64, AtomicBool, Ordering},
+	atomic::{AtomicBool, AtomicU64, Ordering},
 	Arc,
 };
 
@@ -111,7 +111,9 @@ impl ProgressTracker {
 
 	/// Increment bytes transferred
 	pub fn add_bytes(&self, bytes: u64) {
-		self.stats.bytes_transferred.fetch_add(bytes, Ordering::Relaxed);
+		self.stats
+			.bytes_transferred
+			.fetch_add(bytes, Ordering::Relaxed);
 		self.notify();
 	}
 
@@ -143,7 +145,11 @@ impl ProgressTracker {
 			bytes_transferred: self.stats.bytes_transferred.load(Ordering::Relaxed),
 			total_bytes: {
 				let total = self.stats.total_bytes.load(Ordering::Relaxed);
-				if total > 0 { Some(total) } else { None }
+				if total > 0 {
+					Some(total)
+				} else {
+					None
+				}
 			},
 			files_transferred: self.stats.files_transferred.load(Ordering::Relaxed),
 			current_file: self.stats.current_file.lock().clone(),
@@ -166,7 +172,7 @@ impl ProgressTracker {
 /// Format: "filename\n\t1234567 100%  123.45kB/s    0:00:10"
 pub fn parse_progress_line(line: &str) -> Option<ProgressStats> {
 	let line = line.trim();
-	
+
 	// Skip empty lines
 	if line.is_empty() {
 		return None;
@@ -180,9 +186,10 @@ pub fn parse_progress_line(line: &str) -> Option<ProgressStats> {
 
 	// First part might be filename or byte count
 	let bytes = parts[0].replace(',', "").parse::<u64>().ok()?;
-	
+
 	// Look for percentage
-	let percent = parts.iter()
+	let percent = parts
+		.iter()
 		.find(|s| s.contains('%'))
 		.and_then(|s| s.trim_end_matches('%').parse::<f64>().ok())
 		.unwrap_or(0.0);

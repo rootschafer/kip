@@ -1,18 +1,20 @@
 //! Rsync execution engine
 
-use std::path::PathBuf;
-use std::process::Stdio;
-use std::time::Instant;
+use std::{path::PathBuf, process::Stdio, time::Instant};
 
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
+use tokio::{
+	io::{AsyncBufReadExt, BufReader},
+	process::Command,
+};
 use tracing::{debug, warn};
 
-use crate::destination::Destination;
-use crate::error::{Result, RsyncError};
-use crate::platform::Platform;
-use crate::progress::{ProgressTracker, parse_progress_line};
-use crate::stats::RsyncStats;
+use crate::{
+	destination::Destination,
+	error::{Result, RsyncError},
+	platform::Platform,
+	progress::{parse_progress_line, ProgressTracker},
+	stats::RsyncStats,
+};
 
 /// Rsync operation builder
 pub struct Rsync {
@@ -93,9 +95,7 @@ impl Rsync {
 
 		// Verify source exists
 		if !self.source.exists() {
-			return Err(RsyncError::SourceNotFound(
-				self.source.display().to_string(),
-			));
+			return Err(RsyncError::SourceNotFound(self.source.display().to_string()));
 		}
 
 		// Build command
@@ -165,11 +165,11 @@ impl Rsync {
 		if let Some(ssh_opts) = self.destination.ssh_options() {
 			// Build complete SSH command string for rsync -e flag
 			let mut ssh_cmd = String::from("ssh");
-			
+
 			if let Some(ref key) = ssh_opts.identity_file {
 				ssh_cmd.push_str(&format!(" -i '{}'", key.display()));
 			}
-			
+
 			// Get port from destination
 			let port = match &self.destination {
 				crate::destination::Destination::Ssh { port, .. } => *port,
@@ -178,18 +178,18 @@ impl Rsync {
 			if port != 22 {
 				ssh_cmd.push_str(&format!(" -p {}", port));
 			}
-			
+
 			// Add default options for automated/rsync usage
 			ssh_cmd.push_str(" -o StrictHostKeyChecking=no");
 			ssh_cmd.push_str(" -o UserKnownHostsFile=/dev/null");
 			ssh_cmd.push_str(" -o BatchMode=yes");
 			ssh_cmd.push_str(" -o IdentitiesOnly=yes");
-			
+
 			// Add any extra options
 			for option in &ssh_opts.extra_options {
 				ssh_cmd.push_str(&format!(" -o '{}'", option));
 			}
-			
+
 			cmd.arg("-e").arg(&ssh_cmd);
 		}
 
@@ -222,10 +222,10 @@ impl Rsync {
 	async fn run_with_progress(&self, mut cmd: Command) -> Result<RsyncStats> {
 		// Add --stats flag for parsing output
 		cmd.arg("--stats");
-		
+
 		// For SSH destinations, also capture stderr to see SSH errors
 		let capture_stderr = self.destination.is_ssh();
-		
+
 		let mut child = cmd
 			.stderr(Stdio::piped())
 			.stdout(Stdio::piped())
@@ -237,24 +237,28 @@ impl Rsync {
 					RsyncError::CommandFailed(e.to_string())
 				}
 			})?;
-		
+
 		let mut stats = RsyncStats::new();
 		let mut all_output = String::new();
 		let mut ssh_error = String::new();
-		
+
 		// Read stderr for progress and SSH errors
 		if let Some(mut stderr) = child.stderr.take() {
 			let mut reader = BufReader::new(&mut stderr);
 			let mut line = Vec::new();
-			
+
 			while reader.read_until(b'\n', &mut line).await? > 0 {
 				// Try to parse as UTF-8, skip if invalid
 				if let Ok(line_str) = String::from_utf8(line.clone()) {
 					// Capture SSH-related errors
-					if capture_stderr && (line_str.contains("ssh:") || line_str.contains("Permission denied") || line_str.contains("Connection refused")) {
+					if capture_stderr
+						&& (line_str.contains("ssh:")
+							|| line_str.contains("Permission denied")
+							|| line_str.contains("Connection refused"))
+					{
 						ssh_error.push_str(&line_str);
 					}
-					
+
 					// Parse progress line (lines with %)
 					if line_str.contains('%') {
 						if let Some(progress) = parse_progress_line(&line_str) {
@@ -282,9 +286,11 @@ impl Rsync {
 		}
 
 		// Wait for child to complete
-		let status = child.wait().await
+		let status = child
+			.wait()
+			.await
 			.map_err(|e| RsyncError::CommandFailed(e.to_string()))?;
-		
+
 		if !status.success() {
 			// Include SSH error if available
 			let error_msg = if !ssh_error.is_empty() {
@@ -321,10 +327,7 @@ impl Rsync {
 			RsyncError::CommandFailed(format!("Permission denied: {}", stderr))
 		} else if stderr_lower.contains("connection refused") || stderr_lower.contains("could not resolve hostname") {
 			if let Destination::Ssh { host, .. } = &self.destination {
-				RsyncError::SshFailed {
-					host: host.clone(),
-					error: stderr.to_string(),
-				}
+				RsyncError::SshFailed { host: host.clone(), error: stderr.to_string() }
 			} else {
 				RsyncError::CommandFailed(stderr.to_string())
 			}
@@ -335,13 +338,7 @@ impl Rsync {
 }
 
 /// Create parent directory on remote SSH server
-pub async fn ssh_mkdir(
-	host: &str,
-	user: &str,
-	port: u16,
-	path: &str,
-	identity_file: Option<&PathBuf>,
-) -> Result<()> {
+pub async fn ssh_mkdir(host: &str, user: &str, port: u16, path: &str, identity_file: Option<&PathBuf>) -> Result<()> {
 	use std::process::Stdio;
 
 	let mut cmd = Command::new("ssh");

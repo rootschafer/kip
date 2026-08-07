@@ -75,7 +75,10 @@ mod tests {
 	fn test_platform_detect() {
 		let platform = Platform::detect();
 		// Just verify it doesn't panic
-		assert!(matches!(platform, Platform::Macos | Platform::Linux | Platform::Unix | Platform::Windows));
+		assert!(matches!(
+			platform,
+			Platform::Macos | Platform::Linux | Platform::Unix | Platform::Windows
+		));
 	}
 
 	#[test]
