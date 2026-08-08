@@ -8,6 +8,13 @@ target/
 .github/
 .claude/
 
+# Personal/local-only material. These are gitignored, but .dockerignore is
+# evaluated independently — anything omitted here still gets baked into the
+# image even when git would never commit it. Keep this list in step with the
+# personal entries in .gitignore.
+notes/archive/
+check_intents.py
+
 # Nix files are for host development, not the container
 flake.nix
 flake.lock

@@ -38,7 +38,7 @@ Two threads are in flight; neither blocks the other.
 **Kip** is a file transfer orchestrator. Users create sync relationships between locations (files, directories, machines) by connecting nodes in a 2D graph workspace.
 
 **Tech Stack:**
-- **Frontend:** Dioxus 0.7.3 (Rust, desktop + web capable)
+- **Frontend:** Dioxus 0.7.10 (Rust, desktop only — the `web` feature does not build)
 - **Backend:** Rust library with API layer
 - **Database:** SurrealDB 3.0.0 (stable) with SurrealKV embedded storage
 - **CLI:** clap-based command interface
@@ -52,9 +52,9 @@ Two threads are in flight; neither blocks the other.
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Database layer | ✅ Complete | SurrealDB 3.0.0 stable |
-| API layer | ✅ Complete | `src/api/*` modules |
+| API layer | ✅ Complete | `frontend/src/api/*` modules |
 | CLI | ✅ Complete | Full command set |
-| Transfer engine | ✅ Complete | Chunked copying, hashing |
+| Transfer engine | ⚠️ Built, not wired | `daemon/src/engine/` — the GUI does not call it |
 | Filesystem scanner | ✅ Complete | Handles symlinks |
 | Job scheduler | ✅ Complete | Bounded concurrency |
 | Node rendering | ✅ Complete | Files=pills, dirs=circles |
@@ -80,19 +80,22 @@ Two threads are in flight; neither blocks the other.
 
 ## Build Commands
 
+Only the GUI needs `dx`; everything else is plain cargo. `--package` is
+required — this is a workspace with three binaries, and bare `dx build` fails
+with "Failed to find binary package to build".
+
 ```bash
-# Always use dx, not cargo
-dx build                        # Build desktop app
-dx serve --platform desktop     # Run with hot reload
-dx check                        # Check without building
+# GUI (frontend crate)
+dx build --package frontend
+dx serve --package frontend --platform desktop   # hot reload
 
-# CLI
-cargo build --bin kip-cli       # Build CLI
-./target/debug/kip-cli --help   # Show CLI help
+# CLI (package `cli`, binary `kip`)
+cargo build -p cli
+./target/debug/kip --help
 
-# Formatting
-dx fmt                          # Format Dioxus code
-cargo fmt                       # Format Rust code
+# Everything
+cargo test --workspace
+cargo fmt
 ```
 
 ---
@@ -101,18 +104,22 @@ cargo fmt                       # Format Rust code
 
 ```
 kip/
-├── src/
-│   ├── api/              # API layer (intent, location, review, etc.)
-│   ├── engine/           # Transfer engine (transfer, scanner, scheduler)
-│   ├── db/               # Database layer (schema, init)
-│   ├── ui/               # Dioxus UI components
-│   └── bin/              # CLI binary
+├── cli/          # `kip` CLI — backup/restore over local, SSH, cloud
+├── daemon/       # DB layer, transfer engine, scanner, graph store
+│   └── src/engine/   # transfer.rs, scanner.rs, scheduler
+├── frontend/     # Dioxus desktop GUI
+│   ├── src/api/      # API layer (intent, location, review, query, …)
+│   ├── src/ui/       # Components (graph, file picker, review queue)
+│   └── tests/        # Includes headless SSR render tests
+├── kip-core/     # Shared models and graph types
 ├── crates/
-│   └── actix-dioxus-serve/  # Web serving (future)
-├── tests/                # Integration tests
+│   ├── kip-rsync/    # rsync wrapper (local + SSH)
+│   └── kip-rclone/   # rclone wrapper (cloud)
+├── docs/         # User-facing docs
+├── examples/     # Example configs
 └── notes/
-    ├── the_design/       # Design documentation
-    └── new_arch/         # Architecture documentation
+    ├── the_design/   # Design documentation
+    └── new_arch/     # Architecture documentation
 ```
 
 ---
@@ -126,7 +133,6 @@ kip/
 | `INTERACTION_MODEL.md` | Click/drag/keyboard behavior specification |
 | `COMPREHENSIVE_DEVELOPMENT_PLAN.md` | Current state, roadmap, technical debt |
 | `KIP_DESIGN_7_MAPPING_GRAPH.md` | Graph UI architecture (still relevant) |
-| `KIP_DESIGN_8_FILE_PICKER.md` | File picker design |
 
 ### Architecture Documents
 
@@ -141,7 +147,7 @@ kip/
 
 These documents contain outdated information but may have useful context:
 
-- `KIP_DESIGN_1.md` through `KIP_DESIGN_6.md` — Early design thinking
+- `KIP_DESIGN_1.md`, `_2_`, `_4_`, `_6_`, `_7_` — Early design thinking. Docs 3, 5 and 8 were moved into `Phase2/Phase2.2_`, `Phase2/Phase2.3_` and `Phase1/Phase1.1_` respectively.
 - `Phase1/` through `Phase4/` — Original phase plans (superseded)
 - `NEXT_AGENT_HANDOFF.md` — Previous handoff notes
 
@@ -161,11 +167,15 @@ See `CRITICAL_ISSUES.md` for known bugs and workarounds.
 ## Testing
 
 ```bash
-# Run integration tests
-cargo test --test integration_tests -- --test-threads=1
+# Whole workspace (hermetic — no network needed)
+cargo test --workspace
 
-# Run unit tests
-cargo test --test api_tests -- --test-threads=1
+# Frontend only
+cargo test -p frontend --test integration_tests -- --test-threads=1
+cargo test -p frontend --test api_tests -- --test-threads=1
+
+# Headless GUI component rendering (no display required)
+cargo test -p frontend --test ui_render_tests
 ```
 
 **Note:** Some tests are ignored due to SurrealDB type issues.

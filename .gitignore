@@ -22,5 +22,3 @@ kip.log
 # Stray artifact from an older layout
 /frontend/mem:
 
-# Unused sibling crate kept on disk but not part of this repo
-/crates/actix-dioxus-serve/

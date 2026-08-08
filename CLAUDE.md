@@ -1,3 +1,5 @@
+@AGENTS.md
+
 # Kip
 
 Kip (keep in place) is a file transfer orchestrator built in Rust with a Dioxus native UI. Born from a real emergency: 6 hours of manually babysitting 40+ rsync processes across USB drives and flaky SSH tunnels. Never again.
@@ -18,10 +20,14 @@ All live under `notes/the_design/`:
 6. `KIP_DESIGN_6_MVP.md` — Phased roadmap, module structure, build order, **what's done vs. planned**
 7. `KIP_DESIGN_7_MAPPING_GRAPH.md` — Graph UI, selection, grouping, Output node, status indicators
 
-Numbers 3 (intent lifecycle), 5 (error handling) and 8 (file picker) were planned
-but never written — don't go looking for them. The intent state machine is
-described in `KIP_DESIGN_6_MVP.md`; error-handling policy is the "Errors NEVER
-show in UI" rule below.
+Three of the original eight were **relocated**, not deleted — look here, not for
+a `KIP_DESIGN_3/5/8`:
+
+| Original | Now lives at |
+|---|---|
+| 3 — Intent lifecycle | `Phase2/Phase2.2_Intent_Lifecycle_Management.md` |
+| 5 — Error handling | `Phase2/Phase2.3_Error_Handling_and_Review_Queue.md` |
+| 8 — File picker | `Phase1/Phase1.1_Directory_Expansion_and_File_Picker.md` |
 
 Current workstreams and their handoffs are listed in
 `notes/the_design/START_HERE.md`.
@@ -53,11 +59,13 @@ Do not revisit these:
 ## Build & Run
 
 **The `frontend` crate (the Dioxus GUI) must be built with `dx`**, not cargo —
-the Dioxus CLI does asset bundling and platform setup that cargo alone misses:
+the Dioxus CLI does asset bundling and platform setup that cargo alone misses.
+`--package` is required: this is a workspace with three binaries and bare
+`dx build` fails with "Failed to find binary package to build".
 
 ```sh
-dx build                       # build the GUI
-dx serve --platform desktop    # run the GUI with hot reload
+dx build --package frontend
+dx serve --package frontend --platform desktop    # hot reload
 ```
 
 **Everything else is plain cargo.** The CLI, the daemon, and the library crates
@@ -72,6 +80,14 @@ cargo test -p kip-rsync        # one crate
 Tests that need external services (an SSH host, a configured rclone remote) are
 marked `#[ignore]`; `cargo test` skips them and passes with no network. Run them
 deliberately with `-- --ignored` once the service exists.
+
+**Testing UI changes headlessly:** graph components are rendered to HTML with
+`dioxus-ssr` and asserted on — no display, no browser, no wasm. See
+`frontend/tests/ui_render_tests.rs`. This reaches layout geometry and state-to-
+markup wiring, but not pointer/drag interaction. Read
+`notes/the_design/UI_TESTING.md` before assuming a UI bug is verifiable here —
+and note that a web/Playwright build is **not** available (`frontend` links
+SurrealDB and native tokio, so it cannot target wasm).
 
 ### In Docker
 

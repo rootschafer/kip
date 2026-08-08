@@ -338,7 +338,6 @@ kip/
 │       ├── graph_store.rs
 │       └── file_picker.rs
 ├── crates/
-│   └── actix-dioxus-serve/  # Web serving (future)
 ├── tests/                   # Integration tests
 └── notes/
     └── the_design/          # This documentation

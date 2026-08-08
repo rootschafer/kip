@@ -142,11 +142,10 @@ cargo test --test integration_tests  # ✅ 4 passing, 5 ignored
 - `src/engine/transfer.rs` — Renamed from `copier.rs`
 - `src/lib.rs` — Library root
 - `tests/` — Test infrastructure
-- `crates/actix-dioxus-serve/` — Web serving library
 - `notes/new_arch/` — Architecture documentation
 
 ### Modified
-- `Cargo.toml` — Added dependencies (clap, actix-web, etc.)
+- `Cargo.toml` — Added dependencies (clap, etc.)
 - `src/main.rs` — Feature-gated for desktop/web
 - `src/ui/graph.rs` — Fixed simulation restart logic
 - `src/ui/graph_edges.rs` — Removed cluster backgrounds

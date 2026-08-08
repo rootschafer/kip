@@ -6,12 +6,27 @@ Authoritative reference for non-obvious patterns. Read the code first — this c
 
 ## Build Commands
 
-**Always use `dx build` and `dx serve --platform desktop`**. Never use `cargo build` or `cargo run`. The Dioxus CLI handles asset bundling and platform-specific setup.
+**Only the `frontend` crate needs `dx`** — the Dioxus CLI handles asset bundling
+and platform setup that cargo alone misses. `--package` is required; this is a
+workspace with three binaries, and bare `dx build` fails with "Failed to find
+binary package to build".
 
 ```sh
-dx build                        # build
-dx serve --platform desktop     # run with hot reload
+dx build --package frontend
+dx serve --package frontend --platform desktop   # hot reload
 ```
+
+Everything else — the CLI, the daemon, the library crates, and the whole test
+suite — is plain cargo:
+
+```sh
+cargo build -p cli          # the `kip` CLI
+cargo test --workspace      # full suite; hermetic, needs no network
+```
+
+Tests requiring an SSH host or a configured rclone remote are `#[ignore]`d.
+GUI components are tested headlessly via `dioxus-ssr` — see
+`frontend/tests/ui_render_tests.rs` and `notes/the_design/UI_TESTING.md`.
 
 ---
 

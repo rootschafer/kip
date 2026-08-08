@@ -220,12 +220,6 @@ pub fn validate_drive_references(folders: &[Folder], drive_names: &[&str]) -> Re
 mod tests {
 	use super::*;
 
-	// #[test]
-	// fn test_expand_tilde_path() {
-	// 	let path = expand_tilde_path("~/.config/kip/drives.toml");
-	// 	assert_eq!(path.to_string_lossy(), "/Users/anders/.config/kip/drives.toml");
-	// }
-
 	#[test]
 	fn test_expand_tilde_path() {
 		// Test path with tilde

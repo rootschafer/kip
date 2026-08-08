@@ -1,42 +1,8 @@
-# [package]
-# edition = "2021"
-# name = "kip"
-# version = "0.1.0"
-
-# [features]
-# backend = [
-#     "actix-web",
-#     "actix-files",
-#     "actix-web-flash-messages",
-#     "actix-dioxus-serve",
-# ]
-# default = [
-#     "desktop",
-#     "safe_mode",
-# ]
-# desktop = [
-#     "dioxus/desktop",
-#     "surrealdb",
-#     "surrealdb-types",
-#     "tokio",
-#     "rfd",
-#     "tracing-appender",
-#     "walkdir",
-#     "blake3",
-#     "dirs",
-#     "ulid",
-# ]
-# safe_mode = []
-# web = [
-#     "dioxus/web",
-#     "wasm-bindgen-futures",
-# ]
-
-# [[bin]]
-# name = "kip-backend"
-# path = "src/bin/backend.rs"
-# required-features = ["backend"]
-
+# Kip workspace.
+#
+# Members are binaries (cli, daemon, frontend) plus library crates. The GUI
+# lives in `frontend` and is built with `dx`, not cargo; everything else is
+# plain cargo. See CLAUDE.md.
 
 [workspace]
 resolver = "3"
@@ -48,11 +14,6 @@ members = [
     "crates/kip-rsync",
     "crates/kip-rclone",
 ]
-# NOTE: crates/actix-dioxus-serve was a workspace member but no crate in this
-# workspace depends on it, and it was recorded as a git submodule with no
-# .gitmodules entry — so a fresh clone produced an empty directory and the
-# build failed. Dropped from the workspace; re-add it (with a real .gitmodules
-# entry, or vendored) if the web-serving path is picked back up.
 
 [workspace.dependencies]
 plist = "1"
